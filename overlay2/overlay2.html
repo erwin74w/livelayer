@@ -13,69 +13,64 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace
-
         const tickerTextElement = document.getElementById('ticker-text');
-        const defaultTickerData = {
-            messages: ["Ticker loading or not configured..."],
-            separator: " +++ "
-        };
+        const defaultTickerData = { messages: ["Ticker loading or not configured..."], separator: " +++ " };
+        let supabaseClient = null;
+
+        async function initializeSupabase() {
+            try {
+                const response = await fetch('../keys.json');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status} fetching keys.json`);
+                const keys = await response.json();
+                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL")) {
+                    throw new Error("Supabase URL or Anon Key is missing/not configured in keys.json.");
+                }
+                const { createClient } = supabase;
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+                return true;
+            } catch (error) {
+                console.error("Ticker Overlay: Failed to initialize Supabase:", error.message);
+                return false;
+            }
+        }
 
         function displayTicker(data) {
             const separator = data.separator || " • ";
             let fullTickerString = data.messages.join(separator);
-            tickerTextElement.textContent = fullTickerString + separator + fullTickerString; // Duplicate for seamless scroll
-            // Optional: adjustAnimationSpeed(); // If you have this function
+            tickerTextElement.textContent = fullTickerString + separator + fullTickerString;
         }
 
         async function loadTickerContent() {
-            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !supabase) {
-                console.warn("Supabase not configured for ticker, using default.");
-                displayTicker(defaultTickerData);
-                return;
+            if (!supabaseClient) {
+                const initialized = await initializeSupabase();
+                if (!initialized) {
+                    console.warn("Ticker Overlay: Supabase init failed, using default.");
+                    displayTicker(defaultTickerData);
+                    return;
+                }
             }
-            const { createClient } = supabase;
-            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            const { data, error } = await supabaseClient
-                .from('overlay_configurations')
-                .select('config_data')
-                .eq('overlay_type', 'ticker')
-                .single();
+            try {
+                const { data, error } = await supabaseClient
+                    .from('overlay_configurations')
+                    .select('config_data')
+                    .eq('overlay_type', 'ticker')
+                    .single();
 
-            if (error && error.code !== 'PGRST116') {
-                console.error("Could not load ticker content from Supabase:", error);
-                tickerTextElement.textContent = "Error loading ticker.";
-            } else if (data && data.config_data && data.config_data.messages && data.config_data.messages.length > 0) {
-                displayTicker(data.config_data);
-            } else {
-                console.log("No ticker messages found in Supabase or data format incorrect, using default.");
-                displayTicker(defaultTickerData);
+                if (error && error.code !== 'PGRST116') {
+                    console.error("Ticker Overlay: Error loading content:", error);
+                    tickerTextElement.textContent = "Error loading ticker.";
+                } else if (data && data.config_data && data.config_data.messages && data.config_data.messages.length > 0) {
+                    displayTicker(data.config_data);
+                } else {
+                    displayTicker(defaultTickerData);
+                }
+            } catch (fetchError) {
+                 console.error("Ticker Overlay: Supabase fetch error:", fetchError);
+                 tickerTextElement.textContent = "Error loading ticker.";
             }
         }
-        // Optional: function adjustAnimationSpeed() { ... }
-
         loadTickerContent();
-
-        // FOR REAL-TIME UPDATES (Advanced - MVP+):
-        // You would subscribe to changes here if you want the ticker to update live
-        // without the overlay needing to be re-shown or the page refreshed.
-        /*
-        if (supabaseClient) { // Ensure client is initialized
-            const channel = supabaseClient
-                .channel('ticker-updates')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_configurations', filter: 'overlay_type=eq.ticker' }, payload => {
-                    console.log('Ticker config change received!', payload);
-                    if (payload.new && payload.new.config_data) {
-                        displayTicker(payload.new.config_data);
-                    } else if (payload.eventType === 'DELETE' || !payload.new.config_data) {
-                        displayTicker(defaultTickerData); // Handle deletion or empty config
-                    }
-                })
-                .subscribe();
-        }
-        */
     </script>
 </body>
 </html>
