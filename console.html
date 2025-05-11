@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overlay Console</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #toggleButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            min-width: 120px; /* To prevent layout shift when text changes */
+        }
+        #statusIndicator {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid #555;
+        }
+        .status-shown {
+            background-color: #4CAF50; /* Green */
+        }
+        .status-hidden {
+            background-color: #f44336; /* Red */
+        }
+        .button-show {
+            background-color: #4CAF50; /* Green */
+        }
+        .button-hide {
+            background-color: #f44336; /* Red */
+        }
+        h1 {
+            margin-bottom: 30px;
+            color: #333;
+        }
+        p {
+            margin-top: 20px;
+            text-align: center;
+            color: #555;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Overlay Control Console</h1>
+    <div class="controls">
+        <button id="toggleButton">Show Overlay</button>
+        <div id="statusIndicator"></div>
+    </div>
+    <p>
+        This page controls the visibility of the overlay in <code>index.html</code>.
+        Open <code>index.html</code> (your stream overlay source) in another tab or browser source.
+    </p>
+
+    <script>
+        const toggleButton = document.getElementById('toggleButton');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const overlayStateKey = 'overlay1Visibility'; // Key for localStorage
+
+        let isOverlayVisible = false; // Local state for the console's UI
+
+        // Function to update UI based on current state
+        function updateUI() {
+            if (isOverlayVisible) {
+                toggleButton.textContent = 'Hide Overlay';
+                toggleButton.classList.remove('button-show');
+                toggleButton.classList.add('button-hide');
+                statusIndicator.classList.remove('status-hidden');
+                statusIndicator.classList.add('status-shown');
+            } else {
+                toggleButton.textContent = 'Show Overlay';
+                toggleButton.classList.remove('button-hide');
+                toggleButton.classList.add('button-show');
+                statusIndicator.classList.remove('status-shown');
+                statusIndicator.classList.add('status-hidden');
+            }
+        }
+
+        // Function to send command to index.html via localStorage
+        function setOverlayVisibility(visible) {
+            localStorage.setItem(overlayStateKey, visible ? 'show' : 'hide');
+            // Add a timestamp to ensure the 'storage' event fires even if the value is the same
+            localStorage.setItem(overlayStateKey + 'Timestamp', Date.now());
+        }
+
+        // Initialize UI and localStorage from current console state (or default to hidden)
+        function initializeConsole() {
+            // Check if there's a persisted state, otherwise default to hidden
+            const persistedState = localStorage.getItem(overlayStateKey);
+            if (persistedState === 'show') {
+                isOverlayVisible = true;
+            } else {
+                isOverlayVisible = false; // Default or if 'hide'
+                // Ensure localStorage is set to 'hide' if it wasn't set or was something else
+                if (persistedState !== 'hide') {
+                     setOverlayVisibility(false);
+                }
+            }
+            updateUI();
+        }
+
+        toggleButton.addEventListener('click', () => {
+            isOverlayVisible = !isOverlayVisible; // Toggle the local state
+            updateUI();
+            setOverlayVisibility(isOverlayVisible); // Send command
+        });
+
+        // Listen for storage changes from other tabs (e.g., if index.html sets an initial state)
+        // This helps keep consoles in sync if multiple are open, though less critical for this setup.
+        window.addEventListener('storage', (event) => {
+            if (event.key === overlayStateKey) {
+                isOverlayVisible = (event.newValue === 'show');
+                updateUI();
+            }
+        });
+
+        // Initial setup
+        initializeConsole();
+    </script>
+</body>
+</html>
