@@ -1,4 +1,5 @@
 {
-  "supabaseUrl": "YOUR_ACTUAL_SUPABASE_URL",
-  "supabaseAnonKey": "YOUR_ACTUAL_SUPABASE_ANON_KEY"
+  "supabaseUrl": "https://qycbycqbikuojxiiwvnv.supabase.co",
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5Y2J5Y3FiaWt1b2p4aWl3dm52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5OTI3ODUsImV4cCI6MjA2MjU2ODc4NX0.4jWO5qx5182EgVAiRCjk4fcToK__kC39uBsHYgxtUvs"
 }
+
