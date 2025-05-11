@@ -1,0 +1,69 @@
+/* /root/overlay3/overlay3.css */
+
+html, body {
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Arial', sans-serif; /* Choose a suitable font */
+    display: flex;
+    align-items: flex-end; /* Align content to the bottom */
+    justify-content: flex-start; /* Align content to the left */
+}
+
+.lower-third-container {
+    background-color: rgba(10, 20, 80, 0.85); /* Dark blue, semi-transparent */
+    color: white;
+    padding: 15px 25px;
+    margin: 30px; /* Margin from the edges of the screen */
+    border-radius: 8px 0 0 0; /* Rounded top-left corner */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    display: inline-block; /* So it only takes the width of its content + padding */
+    max-width: 40%; /* Prevent it from getting too wide */
+
+    /* Animation for entry */
+    transform: translateX(-120%); /* Start off-screen */
+    animation: slideInLowerThird 0.7s 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    /*
+       0.7s duration
+       0.3s delay
+       cubic-bezier for easing
+       forwards to keep the final state
+    */
+}
+
+@keyframes slideInLowerThird {
+    to {
+        transform: translateX(0);
+    }
+}
+
+.lt-name {
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #87CEFA; /* Light Sky Blue for name */
+}
+
+.lt-function {
+    font-size: 20px;
+    margin-bottom: 2px;
+}
+
+.lt-affiliation {
+    font-size: 16px;
+    font-style: italic;
+    color: #B0C4DE; /* Light Steel Blue for affiliation */
+}
+
+/* Styles for when no data is present */
+.lower-third-container.empty {
+    padding: 10px;
+}
+.lower-third-container.empty::before {
+    content: "Lower Third Data Missing";
+    font-style: italic;
+    color: #ffdddd;
+}
