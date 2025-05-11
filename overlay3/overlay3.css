@@ -8,27 +8,31 @@ html, body {
     height: 100%;
     overflow: hidden;
     font-family: 'Arial', sans-serif;
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-start;
+    /*
+       For absolute positioning of the container directly within body,
+       we don't strictly need flexbox on body here, but it doesn't hurt.
+    */
 }
 
 .lower-third-container {
+    position: absolute; /* Make it absolutely positioned */
+    /*
+      Set its position from the bottom.
+      Again, assuming ticker is ~50px high.
+      So, position this 50px (ticker) + 20px (desired space) = 70px from the bottom.
+    */
+    bottom: 70px;       /* NEW/MODIFIED */
+    left: 30px;         /* NEW/MODIFIED - or keep margin-left */
+    /* margin: 0; remove if using top/left/bottom/right */
+
     background-color: rgba(10, 20, 80, 0.85);
     color: white;
     padding: 15px 25px;
-    /* Adjust margin-left and margin-bottom to position it */
-    margin-left: 30px;
-    /*
-      Assuming your ticker is roughly 50-60px high including its padding.
-      Add a little extra for spacing. Adjust this value as needed.
-    */
-    margin-bottom: 70px; /* INCREASED from 30px */
     border-radius: 8px 0 0 0;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     display: inline-block;
     max-width: 40%;
-    transform: translateX(-120%);
+    transform: translateX(-120%); /* Initial state for animation */
     animation: slideInLowerThird 0.7s 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
