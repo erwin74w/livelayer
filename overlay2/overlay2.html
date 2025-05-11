@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticker Overlay</title>
+    <link rel="stylesheet" href="overlay2.css">
+</head>
+<body>
+    <div id="ticker-container">
+        <div id="ticker-text">
+            <!-- Ticker content will be loaded here by JavaScript -->
+            Loading ticker...
+        </div>
+    </div>
+
+    <script>
+        async function loadTickerContent() {
+            const tickerTextElement = document.getElementById('ticker-text');
+            try {
+                const response = await fetch('ticker-text.json'); // Relative path to JSON
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data && data.messages && data.messages.length > 0) {
+                    const separator = data.separator || " • "; // Default separator if not provided
+                    // Join all messages for a continuous scroll.
+                    // To make the loop seamless, we append the start of the messages again.
+                    // The length of this appended part should ideally be enough to cover the screen width.
+                    let fullTickerString = data.messages.join(separator);
+                    // For a more seamless loop, duplicate the content.
+                    // The animation handles scrolling one "block" of this.
+                    tickerTextElement.textContent = fullTickerString + separator + fullTickerString;
+
+                } else {
+                    tickerTextElement.textContent = "No ticker messages found.";
+                }
+            } catch (error) {
+                console.error("Could not load ticker content:", error);
+                tickerTextElement.textContent = "Error loading ticker.";
+            }
+        }
+
+        // Adjust animation duration based on text length for more consistent speed
+        // This is an optional refinement.
+        function adjustAnimationSpeed() {
+            const tickerTextElement = document.getElementById('ticker-text');
+            const textWidth = tickerTextElement.offsetWidth; // Get actual rendered width
+            const containerWidth = tickerTextElement.parentElement.offsetWidth;
+
+            // If the text is very short, it might not need to scroll or scroll very slowly.
+            // This basic example assumes text is longer than the container.
+            // A simple heuristic: 50 pixels per second.
+            if (textWidth > 0) {
+                const duration = textWidth / 50; // pixels / (pixels/second) = seconds
+                 // The animation scrolls two full widths because of the duplication for seamlessness.
+                tickerTextElement.style.animationDuration = (duration * 2) + 's';
+            }
+        }
+
+
+        // Load content and then potentially adjust speed
+        loadTickerContent().then(() => {
+            // Give the browser a moment to render the text and get its width
+            requestAnimationFrame(() => {
+                requestAnimationFrame(adjustAnimationSpeed); // Call adjustAnimationSpeed after text is rendered
+            });
+        });
+    </script>
+</body>
+</html>
