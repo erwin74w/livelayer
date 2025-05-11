@@ -86,24 +86,28 @@
     </div>
 
     <script>
-        // Script from previous correct version of overlayconfig.html
-        // (The one that handles loading/saving via Supabase, enables/disables buttons, etc.)
-        // This was the version from message "Okay, here is the complete code for each of the specified files, updated to fetch Supabase keys from /root/keys.json."
-        // and then refined in "Understood. You want to ensure the overlayconfig.html page can correctly update the JSON data in your Supabase database table (overlay_configurations)."
-        // For brevity, I'm not repeating the full JS here, but ensure you have that correct, robust version.
-        // Key parts: initializeSupabase, load functions, save functions, DOMContentLoaded logic.
-        // The version from the prompt "Understood. You want to ensure the overlayconfig.html page..." should be correct.
-        // For clarity, here's the JS structure again:
+        const LOG_PREFIX_CONFIG = "OverlayConfig:";
         let supabaseClient = null;
         const initErrorEl = document.getElementById('initError');
+
+        // UI Elements for loading indicators
         const tickerLoadingEl = document.getElementById('tickerLoading');
         const ltLoadingEl = document.getElementById('ltLoading');
         const logoLoadingEl = document.getElementById('logoLoading');
 
-        function showFeedback(element, message, isSuccess) { /* ... */ }
-        async function initializeSupabase() { /* ... (fetches keys.json) ... */
-             try {
+        // --- Generic Feedback Function ---
+        function showFeedback(element, message, isSuccess) {
+            element.textContent = message;
+            element.className = 'feedback ' + (isSuccess ? 'success' : 'error');
+            element.style.display = 'block';
+            setTimeout(() => { element.style.display = 'none'; }, 4000);
+        }
+
+        async function initializeSupabase() {
+            console.log(LOG_PREFIX_CONFIG, "Attempting to initialize Supabase...");
+            try {
                 const response = await fetch('keys.json');
+                console.log(LOG_PREFIX_CONFIG, "Fetched keys.json, status:", response.status);
                 if (!response.ok) throw new Error(`HTTP ${response.status} fetching keys.json`);
                 const keys = await response.json();
                 if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
@@ -111,71 +115,232 @@
                 }
                 const { createClient } = supabase;
                 supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
-                console.log("OverlayConfig: Supabase client initialized.");
+                console.log(LOG_PREFIX_CONFIG, "Supabase client initialized successfully.");
                 return true;
             } catch (error) {
-                console.error("OverlayConfig: Failed to initialize Supabase:", error);
-                initErrorEl.textContent = `Supabase Initialization Error: ${error.message}. Check console & keys.json.`;
+                console.error(LOG_PREFIX_CONFIG, "Failed to initialize Supabase:", error.message, error);
+                initErrorEl.textContent = `Supabase Initialization Error: ${error.message}. Check console & keys.json. Page functionality will be limited.`;
                 initErrorEl.style.display = 'block';
-                document.querySelectorAll('section button[id^="save"]').forEach(btn => btn.disabled = true);
+                document.querySelectorAll('section button[id^="save"]').forEach(btn => {
+                    btn.disabled = true;
+                    btn.title = "Supabase not initialized";
+                });
                 return false;
             }
         }
 
-        // Ticker Elements & Functions (loadTickerConfig, saveTickerButtonEl listener, copyManualJsonButtonEl listener)
-        const tickerMessagesInputEl = document.getElementById('tickerMessagesInput'); /* more elements */
+        // --- Ticker ---
+        const tickerMessagesInputEl = document.getElementById('tickerMessagesInput');
+        const tickerSeparatorInputEl = document.getElementById('tickerSeparatorInput');
         const saveTickerButtonEl = document.getElementById('saveTickerButton');
         const tickerFeedbackEl = document.getElementById('tickerFeedback');
-        // ... (full definitions from previous correct overlayconfig.html)
+        const manualJsonContainerEl = document.getElementById('manualJsonContainer');
+        const manualJsonTextareaEl = document.getElementById('manualJsonTextarea');
+        const copyManualJsonButtonEl = document.getElementById('copyManualJsonButton');
+        const copyManualFeedbackEl = document.getElementById('copyManualFeedback');
 
         async function loadTickerConfig() {
-            if (!supabaseClient) { console.warn("OverlayConfig: Supabase not ready for loadTickerConfig"); return; }
+            if (!supabaseClient) { console.warn(LOG_PREFIX_CONFIG, "Supabase not ready for loadTickerConfig"); return; }
             tickerLoadingEl.style.display = 'inline';
-            console.log("OverlayConfig: Loading ticker config...");
-            try { /* ... */ } catch (error) { /* ... */ } finally { tickerLoadingEl.style.display = 'none'; }
+            console.log(LOG_PREFIX_CONFIG, "Loading ticker config...");
+            try {
+                const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'ticker').maybeSingle();
+                if (error) throw error; // Let outer catch handle
+                if (data && data.config_data) {
+                    console.log(LOG_PREFIX_CONFIG, "Ticker config loaded:", data.config_data);
+                    tickerMessagesInputEl.value = data.config_data.messages.join('\n');
+                    tickerSeparatorInputEl.value = data.config_data.separator;
+                } else {
+                    console.log(LOG_PREFIX_CONFIG, "No ticker config found in DB or it's null. Form will be empty/default.");
+                }
+            } catch (error) {
+                console.error(LOG_PREFIX_CONFIG, 'Error loading ticker config:', error.message, error);
+                showFeedback(tickerFeedbackEl, `Error loading ticker: ${error.message}`, false);
+            } finally {
+                tickerLoadingEl.style.display = 'none';
+            }
         }
         saveTickerButtonEl.addEventListener('click', async () => {
-             if (!supabaseClient) { /* ... */ return; }
-             console.log("OverlayConfig: Saving ticker config...");
-             /* ... */
-        });
-        // ... copyManualJsonButtonEl listener
+            console.log(LOG_PREFIX_CONFIG, "saveTickerButton CLICKED.");
+            if (!supabaseClient) {
+                showFeedback(tickerFeedbackEl, 'Supabase not initialized. Cannot save.', false);
+                console.warn(LOG_PREFIX_CONFIG, "Save Ticker: Supabase client not ready.");
+                return;
+            }
+            console.log(LOG_PREFIX_CONFIG, "Save Ticker: Disabling button.");
+            saveTickerButtonEl.disabled = true; saveTickerButtonEl.textContent = 'Saving...';
+            const messages = tickerMessagesInputEl.value.trim().split('\n').map(s => s.trim()).filter(s => s);
+            const separator = tickerSeparatorInputEl.value.trim();
+            const configData = { messages, separator };
+            console.log(LOG_PREFIX_CONFIG, "Save Ticker: Prepared data:", configData);
+            manualJsonTextareaEl.value = JSON.stringify(configData, null, 2);
 
-        // LowerThird Elements & Functions (loadLowerThirdConfig, saveLowerThirdButtonEl listener)
-        const ltNameInputEl = document.getElementById('ltNameInput'); /* more elements */
+            try {
+                console.log(LOG_PREFIX_CONFIG, "Save Ticker: Attempting Supabase upsert...");
+                const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
+                    { overlay_type: 'ticker', config_data: configData },
+                    { onConflict: 'overlay_type' }
+                );
+                if (error) {
+                    console.error(LOG_PREFIX_CONFIG, 'Save Ticker: Supabase upsert error:', error);
+                    throw error;
+                }
+                console.log(LOG_PREFIX_CONFIG, "Save Ticker: Supabase upsert successful. Response data:", upsertData);
+                showFeedback(tickerFeedbackEl, 'Ticker config saved successfully!', true);
+                manualJsonContainerEl.style.display = 'none';
+            } catch (error) {
+                console.error(LOG_PREFIX_CONFIG, 'Save Ticker: Catch block: Error saving config:', error.message, error);
+                showFeedback(tickerFeedbackEl, `Error saving ticker: ${error.message}. Fallback JSON available.`, false);
+                manualJsonContainerEl.style.display = 'block';
+            } finally {
+                console.log(LOG_PREFIX_CONFIG, "Save Ticker: Finally block: Re-enabling button.");
+                saveTickerButtonEl.disabled = false; saveTickerButtonEl.textContent = 'Save Ticker Config';
+            }
+        });
+        copyManualJsonButtonEl.addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(manualJsonTextareaEl.value); copyManualFeedbackEl.textContent = 'Copied!'; setTimeout(() => { copyManualFeedbackEl.textContent = ''; }, 2000); }
+            catch (err) { copyManualFeedbackEl.textContent = 'Failed to copy.'; }
+        });
+
+        // --- Lower Third ---
+        const ltNameInputEl = document.getElementById('ltNameInput');
+        const ltFunctionInputEl = document.getElementById('ltFunctionInput');
+        const ltAffiliationInputEl = document.getElementById('ltAffiliationInput');
         const saveLowerThirdButtonEl = document.getElementById('saveLowerThirdButton');
         const lowerThirdFeedbackEl = document.getElementById('lowerThirdFeedback');
-        // ... (full definitions from previous correct overlayconfig.html)
-        async function loadLowerThirdConfig() { /* ... console.log ... try/catch/finally ... */ }
-        saveLowerThirdButtonEl.addEventListener('click', async () => { /* ... console.log ... try/catch/finally ... */ });
 
+        async function loadLowerThirdConfig() {
+            if (!supabaseClient) { console.warn(LOG_PREFIX_CONFIG, "Supabase not ready for loadLowerThirdConfig"); return; }
+            ltLoadingEl.style.display = 'inline';
+            console.log(LOG_PREFIX_CONFIG, "Loading Lower Third config...");
+            try {
+                const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'lower_third').maybeSingle();
+                if (error) throw error;
+                if (data && data.config_data) {
+                    console.log(LOG_PREFIX_CONFIG, "Lower Third config loaded:", data.config_data);
+                    ltNameInputEl.value = data.config_data.name || '';
+                    ltFunctionInputEl.value = data.config_data.function || '';
+                    ltAffiliationInputEl.value = data.config_data.affiliation || '';
+                } else {
+                    console.log(LOG_PREFIX_CONFIG, "No Lower Third config found in DB.");
+                }
+            } catch (error) {
+                console.error(LOG_PREFIX_CONFIG, 'Error loading Lower Third config:', error.message, error);
+                showFeedback(lowerThirdFeedbackEl, `Error loading LT: ${error.message}`, false);
+            } finally {
+                ltLoadingEl.style.display = 'none';
+            }
+        }
+        saveLowerThirdButtonEl.addEventListener('click', async () => {
+            console.log(LOG_PREFIX_CONFIG, "saveLowerThirdButton CLICKED.");
+            if (!supabaseClient) { showFeedback(lowerThirdFeedbackEl, 'Supabase not initialized.', false); return; }
+            console.log(LOG_PREFIX_CONFIG, "Save LT: Disabling button.");
+            saveLowerThirdButtonEl.disabled = true; saveLowerThirdButtonEl.textContent = 'Saving...';
+            const configData = { name: ltNameInputEl.value.trim(), function: ltFunctionInputEl.value.trim(), affiliation: ltAffiliationInputEl.value.trim() };
+            console.log(LOG_PREFIX_CONFIG, "Save LT: Prepared data:", configData);
+            try {
+                console.log(LOG_PREFIX_CONFIG, "Save LT: Attempting Supabase upsert...");
+                const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
+                    { overlay_type: 'lower_third', config_data: configData },
+                    { onConflict: 'overlay_type' }
+                );
+                if (error) {
+                    console.error(LOG_PREFIX_CONFIG, 'Save LT: Supabase upsert error:', error);
+                    throw error;
+                }
+                console.log(LOG_PREFIX_CONFIG, "Save LT: Supabase upsert successful. Response data:", upsertData);
+                showFeedback(lowerThirdFeedbackEl, 'Lower Third config saved!', true);
+            } catch (error) {
+                console.error(LOG_PREFIX_CONFIG, 'Save LT: Catch block: Error saving config:', error.message, error);
+                showFeedback(lowerThirdFeedbackEl, `Error saving LT: ${error.message}`, false);
+            } finally {
+                console.log(LOG_PREFIX_CONFIG, "Save LT: Finally block: Re-enabling button.");
+                saveLowerThirdButtonEl.disabled = false; saveLowerThirdButtonEl.textContent = 'Save Lower Third Config';
+            }
+        });
 
-        // Logo Elements & Functions (loadLogoConfig, saveLogoButtonEl listener)
-        const logoUrlInputEl = document.getElementById('logoUrlInput'); /* more elements */
+        // --- Logo ---
+        const logoUrlInputEl = document.getElementById('logoUrlInput');
         const saveLogoButtonEl = document.getElementById('saveLogoButton');
         const logoFeedbackEl = document.getElementById('logoFeedback');
-        // ... (full definitions from previous correct overlayconfig.html)
-        async function loadLogoConfig() { /* ... console.log ... try/catch/finally ... */ }
-        saveLogoButtonEl.addEventListener('click', async () => { /* ... console.log ... try/catch/finally ... */ });
 
+        async function loadLogoConfig() {
+            if (!supabaseClient) { console.warn(LOG_PREFIX_CONFIG, "Supabase not ready for loadLogoConfig"); return; }
+            logoLoadingEl.style.display = 'inline';
+            console.log(LOG_PREFIX_CONFIG, "Loading Logo config...");
+            try {
+                const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'logo').maybeSingle();
+                if (error) throw error;
+                if (data && data.config_data) {
+                    console.log(LOG_PREFIX_CONFIG, "Logo config loaded:", data.config_data);
+                    logoUrlInputEl.value = data.config_data.url || '../pictures/overlay1.png';
+                } else {
+                    console.log(LOG_PREFIX_CONFIG, "No Logo config found in DB, using default.");
+                    logoUrlInputEl.value = '../pictures/overlay1.png';
+                }
+            } catch (error) {
+                console.error(LOG_PREFIX_CONFIG, 'Error loading logo config:', error.message, error);
+                showFeedback(logoFeedbackEl, `Error loading logo: ${error.message}`, false);
+            } finally {
+                logoLoadingEl.style.display = 'none';
+            }
+        }
+        saveLogoButtonEl.addEventListener('click', async () => {
+            console.log(LOG_PREFIX_CONFIG, "saveLogoButton CLICKED.");
+            if (!supabaseClient) { showFeedback(logoFeedbackEl, 'Supabase not initialized.', false); return; }
+            console.log(LOG_PREFIX_CONFIG, "Save Logo: Disabling button.");
+            saveLogoButtonEl.disabled = true; saveLogoButtonEl.textContent = 'Saving...';
+            const configData = { url: logoUrlInputEl.value.trim() };
+            console.log(LOG_PREFIX_CONFIG, "Save Logo: Prepared data:", configData);
+            if (!configData.url) {
+                showFeedback(logoFeedbackEl, 'Logo URL cannot be empty.', false);
+                saveLogoButtonEl.disabled = false; saveLogoButtonEl.textContent = 'Save Logo Config';
+                console.warn(LOG_PREFIX_CONFIG, "Save Logo: URL is empty.");
+                return;
+            }
+            try {
+                console.log(LOG_PREFIX_CONFIG, "Save Logo: Attempting Supabase upsert...");
+                const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
+                    { overlay_type: 'logo', config_data: configData },
+                    { onConflict: 'overlay_type' }
+                );
+                if (error) {
+                    console.error(LOG_PREFIX_CONFIG, 'Save Logo: Supabase upsert error:', error);
+                    throw error;
+                }
+                console.log(LOG_PREFIX_CONFIG, "Save Logo: Supabase upsert successful. Response data:", upsertData);
+                showFeedback(logoFeedbackEl, 'Logo config saved!', true);
+            } catch (error) {
+                console.error(LOG_PREFIX_CONFIG, 'Save Logo: Catch block: Error saving config:', error.message, error);
+                showFeedback(logoFeedbackEl, `Error saving logo: ${error.message}`, false);
+            } finally {
+                console.log(LOG_PREFIX_CONFIG, "Save Logo: Finally block: Re-enabling button.");
+                saveLogoButtonEl.disabled = false; saveLogoButtonEl.textContent = 'Save Logo Config';
+            }
+        });
 
+        // --- Initial Load and Button Enablement ---
         document.addEventListener('DOMContentLoaded', async () => {
-            console.log("OverlayConfig: DOMContentLoaded.");
+            console.log(LOG_PREFIX_CONFIG, "DOMContentLoaded event.");
             const initialized = await initializeSupabase();
             if (initialized) {
                 initErrorEl.style.display = 'none';
                 saveTickerButtonEl.disabled = false;
                 saveLowerThirdButtonEl.disabled = false;
                 saveLogoButtonEl.disabled = false;
-                console.log("OverlayConfig: Initialization successful. Loading all configs.");
+                console.log(LOG_PREFIX_CONFIG, "Initialization successful. Loading all configs in parallel.");
                 Promise.all([
                     loadTickerConfig(),
                     loadLowerThirdConfig(),
                     loadLogoConfig()
-                ]).then(() => console.log("OverlayConfig: All initial configs loaded (or attempted)."))
-                  .catch(err => console.error("OverlayConfig: Error during parallel config load:", err));
+                ]).then(() => {
+                    console.log(LOG_PREFIX_CONFIG, "All initial configs loaded (or load attempted).");
+                }).catch(err => {
+                    console.error(LOG_PREFIX_CONFIG, "Error during parallel config loading:", err);
+                });
             } else {
-                console.warn("OverlayConfig: Supabase not initialized. Config page features are limited.");
+                console.warn(LOG_PREFIX_CONFIG, "Supabase not initialized after DOMContentLoaded. Config page features will be limited.");
+                // Buttons remain disabled due to the catch block in initializeSupabase
             }
         });
     </script>
