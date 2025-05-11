@@ -15,74 +15,78 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace
-
         const nameEl = document.getElementById('ltName');
         const functionEl = document.getElementById('ltFunction');
         const affiliationEl = document.getElementById('ltAffiliation');
         const containerEl = document.getElementById('lowerThirdContainer');
-        const defaultLowerThirdData = { name: "N/A", function: "", affiliation: ""};
+        const defaultLowerThirdData = { name: "N/A", function: "", affiliation: "" };
+        let supabaseClient = null;
+
+        async function initializeSupabase() {
+            try {
+                const response = await fetch('../keys.json');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status} fetching keys.json`);
+                const keys = await response.json();
+                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL")) {
+                    throw new Error("Supabase URL or Anon Key is missing/not configured in keys.json.");
+                }
+                const { createClient } = supabase;
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+                return true;
+            } catch (error) {
+                console.error("Lower Third: Failed to initialize Supabase:", error.message);
+                return false;
+            }
+        }
 
         function updateLowerThirdContent(data) {
-            if (data) {
-                nameEl.textContent = data.name || '';
-                functionEl.textContent = data.function || '';
-                affiliationEl.textContent = data.affiliation || '';
+            const displayData = data || defaultLowerThirdData;
+            nameEl.textContent = displayData.name || '';
+            functionEl.textContent = displayData.function || '';
+            affiliationEl.textContent = displayData.affiliation || '';
+
+            if (data && data.name) { // Check if actual data was passed
                 containerEl.classList.remove('empty');
-                functionEl.style.display = data.function ? 'block' : 'none';
-                affiliationEl.style.display = data.affiliation ? 'block' : 'none';
+                functionEl.style.display = displayData.function ? 'block' : 'none';
+                affiliationEl.style.display = displayData.affiliation ? 'block' : 'none';
             } else {
-                nameEl.textContent = defaultLowerThirdData.name;
-                functionEl.textContent = defaultLowerThirdData.function;
-                affiliationEl.textContent = defaultLowerThirdData.affiliation;
                 containerEl.classList.add('empty');
+                functionEl.style.display = defaultLowerThirdData.function ? 'block' : 'none';
+                affiliationEl.style.display = defaultLowerThirdData.affiliation ? 'block' : 'none';
             }
         }
 
         async function loadContent() {
-            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !supabase) {
-                console.warn("Supabase not configured for lower third, using default.");
-                updateLowerThirdContent(defaultLowerThirdData);
-                return;
+            if (!supabaseClient) {
+                const initialized = await initializeSupabase();
+                if (!initialized) {
+                    console.warn("Lower Third: Supabase init failed, using default.");
+                    updateLowerThirdContent(null); // Use default/placeholder
+                    return;
+                }
             }
-            const { createClient } = supabase;
-            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            const { data, error } = await supabaseClient
-                .from('overlay_configurations')
-                .select('config_data')
-                .eq('overlay_type', 'lower_third')
-                .single();
+            try {
+                const { data, error } = await supabaseClient
+                    .from('overlay_configurations')
+                    .select('config_data')
+                    .eq('overlay_type', 'lower_third')
+                    .single();
 
-            if (error && error.code !== 'PGRST116') {
-                console.error("Error loading lower third data from Supabase:", error);
-                updateLowerThirdContent(null); // Show placeholder on error
-            } else if (data && data.config_data) {
-                updateLowerThirdContent(data.config_data);
-            } else {
-                console.log("No lower third data in Supabase, using default.");
-                updateLowerThirdContent(defaultLowerThirdData);
+                if (error && error.code !== 'PGRST116') {
+                    console.error("Lower Third: Error loading data:", error);
+                    updateLowerThirdContent(null);
+                } else if (data && data.config_data) {
+                    updateLowerThirdContent(data.config_data);
+                } else {
+                    updateLowerThirdContent(null); // No data in DB, use default
+                }
+            } catch (fetchError) {
+                console.error("Lower Third: Supabase fetch error:", fetchError);
+                updateLowerThirdContent(null);
             }
         }
         loadContent();
-
-        // FOR REAL-TIME UPDATES (Advanced - MVP+):
-        /*
-        if (supabaseClient) {
-             const channel = supabaseClient
-                .channel('lower-third-updates')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_configurations', filter: 'overlay_type=eq.lower_third' }, payload => {
-                    console.log('Lower Third config change received!', payload);
-                    if (payload.new && payload.new.config_data) {
-                        updateLowerThirdContent(payload.new.config_data);
-                    } else {
-                         updateLowerThirdContent(defaultLowerThirdData);
-                    }
-                })
-                .subscribe();
-        }
-        */
     </script>
 </body>
 </html>
