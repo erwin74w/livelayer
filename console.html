@@ -10,7 +10,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            /* justify-content: center; */ /* Allow scrolling if content overflows */
+            padding-top: 30px; /* Add some padding at the top */
             min-height: 100vh;
             margin: 0;
             background-color: #f0f0f0;
@@ -29,41 +30,48 @@
         .controls {
             display: flex;
             align-items: center;
-            justify-content: space-around; /* Space out button and indicator */
+            justify-content: space-around;
             gap: 15px;
             margin-top: 10px;
         }
-        .toggleButton { /* Generic class for buttons */
+        .toggleButton {
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
             border: none;
             border-radius: 5px;
             color: white;
-            min-width: 130px;
+            min-width: 130px; /* Adjusted min-width for potentially longer names */
         }
-        .statusIndicator { /* Generic class for indicators */
+        .statusIndicator {
             width: 30px;
             height: 30px;
             border-radius: 50%;
             border: 2px solid #555;
         }
-        .status-shown { background-color: #4CAF50; /* Green */ }
-        .status-hidden { background-color: #f44336; /* Red */ }
-        .button-show { background-color: #4CAF50; /* Green */ }
-        .button-hide { background-color: #f44336; /* Red */ }
-        h1 { margin-bottom: 30px; color: #333; }
+        .status-shown { background-color: #4CAF50; }
+        .status-hidden { background-color: #f44336; }
+        .button-show { background-color: #4CAF50; }
+        .button-hide { background-color: #f44336; }
+        h1 { margin-bottom: 30px; color: #333; text-align: center;}
         h2 { margin-bottom: 5px; font-size: 1.2em; color: #444; }
-        p { margin-top: 30px; text-align: center; color: #555; max-width: 500px;}
+        .instructions-link {
+            display: block;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 1.1em;
+        }
     </style>
 </head>
 <body>
     <h1>Overlay Control Console</h1>
+    <a href="overlayconfig.html" target="_blank" class="instructions-link">Open Overlay Configuration Page</a>
+
 
     <div class="control-group">
         <h2>Overlay 1 (Logo)</h2>
         <div class="controls">
-            <button id="toggleButton1" class="toggleButton">Show Overlay 1</button>
+            <button id="toggleButton1" class="toggleButton">Show Logo</button>
             <div id="statusIndicator1" class="statusIndicator"></div>
         </div>
     </div>
@@ -71,36 +79,47 @@
     <div class="control-group">
         <h2>Overlay 2 (Ticker)</h2>
         <div class="controls">
-            <button id="toggleButton2" class="toggleButton">Show Overlay 2</button>
+            <button id="toggleButton2" class="toggleButton">Show Ticker</button>
             <div id="statusIndicator2" class="statusIndicator"></div>
         </div>
     </div>
 
-    <p>
-        This page controls the visibility of overlays in <code>index.html</code>.
-        Open <code>index.html</code> (your stream overlay source) in another tab or browser source.
-    </p>
+    <div class="control-group">
+        <h2>Overlay 3 (Lower Third)</h2>
+        <div class="controls">
+            <button id="toggleButton3" class="toggleButton">Show Lower Third</button>
+            <div id="statusIndicator3" class="statusIndicator"></div>
+        </div>
+    </div>
 
     <script>
-        // --- Configuration for Overlays ---
         const overlays = [
             {
                 id: 1,
                 buttonEl: document.getElementById('toggleButton1'),
                 indicatorEl: document.getElementById('statusIndicator1'),
                 storageKey: 'overlay1Visibility',
-                defaultTextShow: 'Show Overlay 1',
-                defaultTextHide: 'Hide Overlay 1',
-                isVisible: false // Initial local state
+                defaultTextShow: 'Show Logo',
+                defaultTextHide: 'Hide Logo',
+                isVisible: false
             },
             {
                 id: 2,
                 buttonEl: document.getElementById('toggleButton2'),
                 indicatorEl: document.getElementById('statusIndicator2'),
                 storageKey: 'overlay2Visibility',
-                defaultTextShow: 'Show Overlay 2',
-                defaultTextHide: 'Hide Overlay 2',
-                isVisible: false // Initial local state
+                defaultTextShow: 'Show Ticker',
+                defaultTextHide: 'Hide Ticker',
+                isVisible: false
+            },
+            { // New Overlay 3 configuration
+                id: 3,
+                buttonEl: document.getElementById('toggleButton3'),
+                indicatorEl: document.getElementById('statusIndicator3'),
+                storageKey: 'overlay3Visibility',
+                defaultTextShow: 'Show Lower Third',
+                defaultTextHide: 'Hide Lower Third',
+                isVisible: false
             }
         ];
 
@@ -122,7 +141,7 @@
 
         function setOverlayVisibilityInStorage(overlayKey, visible) {
             localStorage.setItem(overlayKey, visible ? 'show' : 'hide');
-            localStorage.setItem(overlayKey + 'Timestamp', Date.now()); // Force storage event
+            localStorage.setItem(overlayKey + 'Timestamp', Date.now());
         }
 
         function initializeConsole() {
@@ -132,7 +151,7 @@
                     overlay.isVisible = true;
                 } else {
                     overlay.isVisible = false;
-                    if (persistedState !== 'hide') { // Set default if not explicitly 'hide' or 'show'
+                    if (persistedState !== 'hide') {
                         setOverlayVisibilityInStorage(overlay.storageKey, false);
                     }
                 }
@@ -148,7 +167,9 @@
 
         window.addEventListener('storage', (event) => {
             overlays.forEach(overlay => {
+                // Only update if the primary visibility key changes
                 if (event.key === overlay.storageKey) {
+                    // Check explicitly for 'show' vs 'hide', as event.newValue could be null if cleared
                     overlay.isVisible = (event.newValue === 'show');
                     updateUI(overlay);
                 }
