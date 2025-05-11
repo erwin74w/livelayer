@@ -2,63 +2,40 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Overlay Test Page</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stream Overlay</title>
     <style>
-        body {
-            font-family: sans-serif;
-            margin: 20px;
-            background-color: #f0f0f0; /* So you can see the transparent iframe */
+        /* Make the entire HTML document and body transparent */
+        html, body {
+            background-color: transparent !important; /* Ensure transparency */
+            margin: 0;
+            padding: 0;
+            width: 100%;    /* Fill the container/viewport */
+            height: 100%;   /* Fill the container/viewport */
+            overflow: hidden; /* Prevent scrollbars */
         }
-        .iframe-container {
-            width: 1280px; /* Example width, match your stream canvas or test size */
-            height: 720px; /* Example height */
-            border: 2px dashed #333; /* To see the iframe boundaries */
-            position: relative; /* For positioning the iframe */
-            background-image: repeating-linear-gradient(
-                45deg,
-                #ccc,
-                #ccc 10px,
-                #eee 10px,
-                #eee 20px
-            ); /* Checkerboard to demonstrate transparency */
-        }
+
+        /* Style the iframe to be full screen and transparent */
         iframe {
+            display: block; /* Removes potential small gap underneath */
             width: 100%;
             height: 100%;
             border: none; /* Crucial: remove iframe border */
-            /*
-            The allowtransparency attribute is for older browsers.
-            Modern browsers respect CSS transparency from the iframe's content.
-            Setting the iframe's background to transparent here is also good practice.
-            */
-            background-color: transparent;
+            background-color: transparent; /* Ensure iframe's own background is transparent */
         }
     </style>
 </head>
 <body>
-    <h1>Livestream Overlay Test</h1>
-    <p>
-        The content below is an iframe showing <code>overlay1/overlay1.html</code>.
-        The logo should appear in the top-left, and the rest should be transparent,
-        showing the checkerboard pattern from this parent page.
-    </p>
-
-    <div class="iframe-container">
-        <iframe
-            src="overlay1/overlay1.html"
-            allowtransparency="true"
-            scrolling="no"
-            frameborder="0"
-        ></iframe>
-    </div>
-
-    <h2>Notes for Streaming Software (e.g., OBS):</h2>
-    <ul>
-        <li>You will typically add <code>overlay1/overlay1.html</code> (or its full GitHub Pages URL) as a "Browser Source".</li>
-        <li>Ensure the Browser Source dimensions match your intended overlay size (e.g., 1920x1080).</li>
-        <li>The transparency should work automatically. You don't usually need chroma key filters for HTML/CSS transparency.</li>
-    </ul>
-
+    <!--
+        This iframe will load overlay1.html.
+        The iframe itself is transparent, and its content (overlay1.html)
+        is also designed to be transparent except for the logo.
+    -->
+    <iframe
+        src="overlay1/overlay1.html"
+        allowtransparency="true"
+        scrolling="no"
+        frameborder="0"
+    ></iframe>
 </body>
 </html>
