@@ -12,7 +12,7 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            position: relative; /* For absolute positioning of iframes if needed, though not strictly necessary here */
+            position: relative;
         }
         iframe {
             display: block;
@@ -20,12 +20,13 @@
             height: 100%;
             border: none;
             background-color: transparent;
-            position: absolute; /* Allows stacking if needed, though visibility handles it */
+            position: absolute;
             top: 0;
             left: 0;
         }
         .hidden {
             display: none !important;
+            /* Or use visibility: hidden; opacity: 0; pointer-events: none; if you want animations on show/hide from index.html */
         }
     </style>
 </head>
@@ -36,7 +37,7 @@
         allowtransparency="true"
         scrolling="no"
         frameborder="0"
-        class="hidden" <!-- Start hidden, JS will control -->
+        class="hidden"
     ></iframe>
 
     <iframe
@@ -45,28 +46,41 @@
         allowtransparency="true"
         scrolling="no"
         frameborder="0"
-        class="hidden" <!-- Start hidden, JS will control -->
+        class="hidden"
+    ></iframe>
+
+    <iframe
+        id="overlayFrame3"
+        src="overlay3/overlay3.html"
+        allowtransparency="true"
+        scrolling="no"
+        frameborder="0"
+        class="hidden"
     ></iframe>
 
     <script>
-        // --- Configuration for Overlay Frames ---
         const overlayFrames = [
             {
                 frameEl: document.getElementById('overlayFrame1'),
                 storageKey: 'overlay1Visibility',
-                defaultState: 'hide' // Or 'show' to be visible by default
+                defaultState: 'hide'
             },
             {
                 frameEl: document.getElementById('overlayFrame2'),
                 storageKey: 'overlay2Visibility',
-                defaultState: 'hide' // Or 'show' to be visible by default
+                defaultState: 'hide'
+            },
+            { // New Overlay 3 frame
+                frameEl: document.getElementById('overlayFrame3'),
+                storageKey: 'overlay3Visibility',
+                defaultState: 'hide'
             }
         ];
 
         function applyVisibility(frameElement, state) {
             if (state === 'show') {
                 frameElement.classList.remove('hidden');
-            } else { // 'hide' or any other value defaults to hidden
+            } else {
                 frameElement.classList.add('hidden');
             }
         }
@@ -86,11 +100,12 @@
 
         window.addEventListener('storage', (event) => {
             overlayFrames.forEach(overlay => {
-                if (event.key === overlay.storageKey) {
+                if (event.key === overlay.storageKey) { // Only react to the main visibility key
                     if (event.newValue) {
                         applyVisibility(overlay.frameEl, event.newValue);
                     } else {
-                        applyVisibility(overlay.frameEl, overlay.defaultState); // Revert to default if key removed
+                        // Key was removed or set to null/undefined, revert to default
+                        applyVisibility(overlay.frameEl, overlay.defaultState);
                     }
                 }
             });
