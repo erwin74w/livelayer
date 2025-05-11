@@ -1,0 +1,25 @@
+/* /root/overlay1/overlay.css */
+
+/* Make the entire HTML document transparent */
+html, body {
+    background-color: transparent;
+    margin: 0; /* Remove default browser margins */
+    padding: 0; /* Remove default browser padding */
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Prevent scrollbars if content overflows */
+}
+
+#logo {
+    position: absolute; /* Position relative to the viewport */
+    top: 20px;          /* Distance from the top edge */
+    left: 20px;         /* Distance from the left edge */
+    width: 150px;       /* Example width, adjust as needed */
+    height: auto;       /* Maintain aspect ratio */
+    /*
+    You can also use other units like % or vh/vw:
+    top: 2vh;
+    left: 1vw;
+    width: 10vw;
+    */
+}
