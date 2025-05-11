@@ -1,0 +1,49 @@
+/* /root/overlay2/overlay2.css */
+
+html, body {
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Important for full-page overlay */
+    font-family: Arial, sans-serif;
+}
+
+#ticker-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.75); /* Semi-transparent black background */
+    color: white;
+    padding: 10px 0; /* Padding top/bottom, no padding left/right */
+    overflow: hidden; /* Crucial: Hides the text that's outside the container */
+    white-space: nowrap; /* Prevents text from wrapping to the next line */
+    box-sizing: border-box;
+}
+
+#ticker-text {
+    display: inline-block; /* Allows transform and respects white-space: nowrap */
+    padding-left: 100%;    /* Start the text off-screen to the right */
+    font-size: 24px;      /* Adjust as needed */
+    line-height: 1.2;
+    animation: ticker-scroll 30s linear infinite; /* Adjust duration as needed */
+}
+
+/* Ticker Animation */
+@keyframes ticker-scroll {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-100%); /* Moves text its own width to the left */
+    }
+}
+
+/* Optional: Pause animation on hover */
+/*
+#ticker-container:hover #ticker-text {
+    animation-play-state: paused;
+}
+*/
