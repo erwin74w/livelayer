@@ -62,9 +62,16 @@
             font-size: 16px;
             font-weight: 600;
             transition: background-color 0.2s cubic-bezier(0.3, 0, 0.5, 1);
+            margin-right: 10px; /* Space between buttons */
         }
         button:hover {
             background-color: #2c974b;
+        }
+        button.secondary { /* Style for secondary buttons like 'Copy' */
+            background-color: #0366d6; /* GitHub blue */
+        }
+        button.secondary:hover {
+            background-color: #005cc5;
         }
         .output-area {
             margin-top: 25px;
@@ -78,6 +85,7 @@
             white-space: pre-wrap; /* Allows wrapping and preserves whitespace */
             word-wrap: break-word; /* Breaks long words */
             overflow-x: auto;
+            margin-bottom: 10px; /* Space before copy button */
         }
         .instructions {
             background-color: #fffbdd; /* Light yellow */
@@ -101,6 +109,12 @@
             border-radius: 6px;
             margin-top: 10px;
         }
+        .copy-feedback { /* For "Copied!" message */
+            display: inline-block;
+            margin-left: 10px;
+            color: #2ea44f;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -122,10 +136,14 @@
             <div class="output-area" id="tickerJsonOutputContainer" style="display:none;">
                 <h3>Generated JSON for <code>overlay2/ticker-text.json</code>:</h3>
                 <textarea id="generatedJsonFeedback" readonly></textarea>
+                <!-- ADDED: Copy Button and feedback span -->
+                <button id="copyJsonButton" class="secondary">Copy JSON to Clipboard</button>
+                <span id="copyFeedback" class="copy-feedback"></span>
+                <!-- END ADDED -->
                 <div class="instructions">
                     <strong>ACTION REQUIRED:</strong>
                     <ol>
-                        <li><strong>Copy</strong> the entire content from the text area above.</li>
+                        <li><strong>Copy</strong> the entire content from the text area above (or use the "Copy JSON" button).</li>
                         <li>In your GitHub repository, navigate to and open the <code>overlay2/ticker-text.json</code> file.</li>
                         <li>Click the "Edit this file" (pencil) icon.</li>
                         <li>Delete all existing content in the file.</li>
@@ -137,17 +155,6 @@
             </div>
             <div id="tickerConfigError" class="error-message" style="display:none;"></div>
         </section>
-
-        <!-- Example: Future section for Overlay 1 (Logo) configuration -->
-        <!--
-        <section id="logoConfig">
-            <h2>Logo Settings (Overlay 1)</h2>
-            <p><em>Future: Configure logo source, size, position (would likely require manual CSS update or localStorage).</em></p>
-            <label for="logoSrc">Logo Image URL (relative to /pictures/):</label>
-            <input type="text" id="logoSrc" value="overlay1.png" disabled>
-             <button disabled>Update Logo Settings (Not Implemented)</button>
-        </section>
-        -->
 
     </div>
 
@@ -161,31 +168,31 @@
             const tickerJsonOutputContainerEl = document.getElementById('tickerJsonOutputContainer');
             const tickerConfigErrorEl = document.getElementById('tickerConfigError');
 
+            // ADDED: Get reference to the new copy button and feedback span
+            const copyJsonButtonEl = document.getElementById('copyJsonButton');
+            const copyFeedbackEl = document.getElementById('copyFeedback');
+            // END ADDED
+
             const tickerJsonFilePath = 'overlay2/ticker-text.json';
 
-            // Function to display errors
             function showTickerError(message) {
                 tickerConfigErrorEl.textContent = message;
                 tickerConfigErrorEl.style.display = 'block';
                 tickerJsonOutputContainerEl.style.display = 'none';
             }
 
-            // Function to clear errors
             function clearTickerError() {
                 tickerConfigErrorEl.textContent = '';
                 tickerConfigErrorEl.style.display = 'none';
             }
 
-            // Load existing ticker configuration to pre-fill the form
             async function loadInitialTickerConfig() {
                 try {
-                    // Add a cache-busting parameter to ensure fresh data
                     const response = await fetch(`${tickerJsonFilePath}?t=${Date.now()}`);
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status} while fetching ${tickerJsonFilePath}`);
                     }
                     const data = await response.json();
-
                     if (data.messages && Array.isArray(data.messages)) {
                         tickerMessagesInputEl.value = data.messages.join('\n');
                     }
@@ -201,11 +208,12 @@
 
             generateTickerJsonButtonEl.addEventListener('click', () => {
                 clearTickerError();
+                copyFeedbackEl.textContent = ''; // Clear any previous copy feedback
                 const messagesArray = tickerMessagesInputEl.value
                     .trim()
                     .split('\n')
                     .map(line => line.trim())
-                    .filter(line => line.length > 0); // Remove empty lines
+                    .filter(line => line.length > 0);
 
                 const separator = tickerSeparatorInputEl.value;
 
@@ -219,12 +227,38 @@
                     separator: separator
                 };
 
-                generatedJsonFeedbackEl.value = JSON.stringify(newJsonData, null, 2); // Pretty print
+                generatedJsonFeedbackEl.value = JSON.stringify(newJsonData, null, 2);
                 tickerJsonOutputContainerEl.style.display = 'block';
-                generatedJsonFeedbackEl.scrollTop = 0; // Scroll to top of textarea
+                generatedJsonFeedbackEl.scrollTop = 0;
             });
 
-            // Load initial data when the page is ready
+            // ADDED: Event listener for the copy button
+            copyJsonButtonEl.addEventListener('click', async () => {
+                const jsonToCopy = generatedJsonFeedbackEl.value;
+                if (!jsonToCopy) {
+                    copyFeedbackEl.textContent = 'Nothing to copy.';
+                    return;
+                }
+
+                try {
+                    await navigator.clipboard.writeText(jsonToCopy);
+                    copyFeedbackEl.textContent = 'Copied!';
+                    // Optionally clear the message after a few seconds
+                    setTimeout(() => {
+                        copyFeedbackEl.textContent = '';
+                    }, 3000);
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                    copyFeedbackEl.textContent = 'Copy failed. Please copy manually.';
+                    // Fallback for older browsers or if permission is denied (less likely in this context)
+                    // You could select the text and prompt the user to Ctrl+C
+                    generatedJsonFeedbackEl.select();
+                    generatedJsonFeedbackEl.setSelectionRange(0, 99999); // For mobile devices
+                    alert('Could not copy automatically. Please press Ctrl+C (or Cmd+C) to copy the JSON.');
+                }
+            });
+            // END ADDED
+
             loadInitialTickerConfig();
         });
     </script>
