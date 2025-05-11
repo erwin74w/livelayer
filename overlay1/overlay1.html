@@ -3,17 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Livestream Overlay 1</title>
-    <!-- Link to the external CSS file -->
-    <link rel="stylesheet" href="overlay.css">
+    <title>Livestream Overlay 1 (Logo)</title>
+    <link rel="stylesheet" href="overlay.css"> <!-- Assuming overlay.css defines #logo position -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <!-- The logo image -->
-    <!-- The src path is relative to overlay1.html:
-         ../ means go up one directory (to /root/)
-         pictures/ means go into the pictures directory
-         overlay1.png is the image file
-    -->
-    <img id="logo" src="../pictures/overlay1.png" alt="Stream Logo">
+    <img id="logo" src="" alt="Stream Logo"> <!-- Start with empty src -->
+
+    <script>
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace
+
+        const logoImg = document.getElementById('logo');
+        const defaultLogoUrl = '../pictures/overlay1.png'; // Fallback
+
+        async function loadLogo() {
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !supabase) { // Check if supabase var exists
+                logoImg.src = defaultLogoUrl;
+                console.warn("Supabase not configured for logo, using default.");
+                return;
+            }
+            const { createClient } = supabase;
+            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            const { data, error } = await supabaseClient
+                .from('overlay_configurations')
+                .select('config_data')
+                .eq('overlay_type', 'logo')
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                console.error('Error fetching logo config:', error);
+                logoImg.src = defaultLogoUrl;
+            } else if (data && data.config_data && data.config_data.url) {
+                logoImg.src = data.config_data.url;
+            } else {
+                logoImg.src = defaultLogoUrl; // Use default if no URL in DB
+            }
+        }
+        loadLogo();
+    </script>
 </body>
 </html>
