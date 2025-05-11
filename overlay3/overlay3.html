@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lower Third Overlay</title>
+    <link rel="stylesheet" href="overlay3.css">
+</head>
+<body>
+    <div id="lowerThirdContainer" class="lower-third-container">
+        <div id="ltName" class="lt-name"></div>
+        <div id="ltFunction" class="lt-function"></div>
+        <div id="ltAffiliation" class="lt-affiliation"></div>
+    </div>
+
+    <script>
+        const nameEl = document.getElementById('ltName');
+        const functionEl = document.getElementById('ltFunction');
+        const affiliationEl = document.getElementById('ltAffiliation');
+        const containerEl = document.getElementById('lowerThirdContainer');
+
+        const lowerThirdDataKey = 'lowerThirdData';
+
+        function updateLowerThirdContent(data) {
+            if (data && data.name) { // Check if name exists, at least
+                nameEl.textContent = data.name || '';
+                functionEl.textContent = data.function || '';
+                affiliationEl.textContent = data.affiliation || '';
+                containerEl.classList.remove('empty');
+
+                // Hide fields if they are empty to prevent empty lines
+                functionEl.style.display = data.function ? 'block' : 'none';
+                affiliationEl.style.display = data.affiliation ? 'block' : 'none';
+
+            } else {
+                nameEl.textContent = '';
+                functionEl.textContent = '';
+                affiliationEl.textContent = '';
+                containerEl.classList.add('empty'); // Add class to show placeholder
+            }
+        }
+
+        function loadContent() {
+            try {
+                const storedData = localStorage.getItem(lowerThirdDataKey);
+                if (storedData) {
+                    const parsedData = JSON.parse(storedData);
+                    updateLowerThirdContent(parsedData);
+                } else {
+                    // Default content or placeholder if nothing in localStorage
+                    updateLowerThirdContent({ name: "", function: "", affiliation: "" }); // Show empty or placeholder
+                }
+            } catch (e) {
+                console.error("Error loading or parsing lower third data:", e);
+                updateLowerThirdContent(null); // Show placeholder on error
+            }
+        }
+
+        // Initial load
+        loadContent();
+
+        // Listen for changes from overlayconfig.html (or console, if it were to set data)
+        window.addEventListener('storage', (event) => {
+            if (event.key === lowerThirdDataKey) {
+                if (event.newValue) {
+                    try {
+                        const parsedData = JSON.parse(event.newValue);
+                        updateLowerThirdContent(parsedData);
+                    } catch (e) {
+                        console.error("Error parsing updated lower third data:", e);
+                        updateLowerThirdContent(null);
+                    }
+                } else {
+                    // Data was cleared from localStorage
+                    updateLowerThirdContent(null);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
