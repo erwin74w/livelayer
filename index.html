@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overlay Test Page</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0; /* So you can see the transparent iframe */
+        }
+        .iframe-container {
+            width: 1280px; /* Example width, match your stream canvas or test size */
+            height: 720px; /* Example height */
+            border: 2px dashed #333; /* To see the iframe boundaries */
+            position: relative; /* For positioning the iframe */
+            background-image: repeating-linear-gradient(
+                45deg,
+                #ccc,
+                #ccc 10px,
+                #eee 10px,
+                #eee 20px
+            ); /* Checkerboard to demonstrate transparency */
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none; /* Crucial: remove iframe border */
+            /*
+            The allowtransparency attribute is for older browsers.
+            Modern browsers respect CSS transparency from the iframe's content.
+            Setting the iframe's background to transparent here is also good practice.
+            */
+            background-color: transparent;
+        }
+    </style>
+</head>
+<body>
+    <h1>Livestream Overlay Test</h1>
+    <p>
+        The content below is an iframe showing <code>overlay1/overlay1.html</code>.
+        The logo should appear in the top-left, and the rest should be transparent,
+        showing the checkerboard pattern from this parent page.
+    </p>
+
+    <div class="iframe-container">
+        <iframe
+            src="overlay1/overlay1.html"
+            allowtransparency="true"
+            scrolling="no"
+            frameborder="0"
+        ></iframe>
+    </div>
+
+    <h2>Notes for Streaming Software (e.g., OBS):</h2>
+    <ul>
+        <li>You will typically add <code>overlay1/overlay1.html</code> (or its full GitHub Pages URL) as a "Browser Source".</li>
+        <li>Ensure the Browser Source dimensions match your intended overlay size (e.g., 1920x1080).</li>
+        <li>The transparency should work automatically. You don't usually need chroma key filters for HTML/CSS transparency.</li>
+    </ul>
+
+</body>
+</html>
