@@ -15,37 +15,51 @@
     </div>
 
     <script>
+        const LOG_PREFIX = "Overlay3 (LowerThird):";
+        console.log(LOG_PREFIX, "Script started.");
+
         const nameEl = document.getElementById('ltName');
         const functionEl = document.getElementById('ltFunction');
         const affiliationEl = document.getElementById('ltAffiliation');
         const containerEl = document.getElementById('lowerThirdContainer');
         const defaultLowerThirdData = { name: "N/A", function: "", affiliation: "" };
         let supabaseClient = null;
+        let lowerThirdChannel = null;
 
         async function initializeSupabase() {
+            console.log(LOG_PREFIX, "Attempting to initialize Supabase...");
             try {
                 const response = await fetch('../keys.json');
+                console.log(LOG_PREFIX, "Fetched keys.json, status:", response.status);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status} fetching keys.json`);
                 const keys = await response.json();
-                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL")) {
+                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
                     throw new Error("Supabase URL or Anon Key is missing/not configured in keys.json.");
                 }
                 const { createClient } = supabase;
                 supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+                console.log(LOG_PREFIX, "Supabase client initialized successfully.");
                 return true;
             } catch (error) {
-                console.error("Lower Third: Failed to initialize Supabase:", error.message);
+                console.error(LOG_PREFIX, "Failed to initialize Supabase:", error.message, error);
                 return false;
             }
         }
 
         function updateLowerThirdContent(data) {
             const displayData = data || defaultLowerThirdData;
+            console.log(LOG_PREFIX, "Updating Lower Third content with data:", displayData);
+
+            if (containerEl.style.animationName) {
+                containerEl.style.animation = 'none';
+                containerEl.offsetHeight;
+            }
+
             nameEl.textContent = displayData.name || '';
             functionEl.textContent = displayData.function || '';
             affiliationEl.textContent = displayData.affiliation || '';
 
-            if (data && data.name) { // Check if actual data was passed
+            if (data && data.name) {
                 containerEl.classList.remove('empty');
                 functionEl.style.display = displayData.function ? 'block' : 'none';
                 affiliationEl.style.display = displayData.affiliation ? 'block' : 'none';
@@ -54,39 +68,88 @@
                 functionEl.style.display = defaultLowerThirdData.function ? 'block' : 'none';
                 affiliationEl.style.display = defaultLowerThirdData.affiliation ? 'block' : 'none';
             }
+            containerEl.style.animation = ''; // Re-apply CSS animation
+            console.log(LOG_PREFIX, "Lower Third display updated and animation reset.");
         }
 
-        async function loadContent() {
+
+        async function loadAndListenForLowerThirdChanges() {
+            console.log(LOG_PREFIX, "loadAndListenForLowerThirdChanges called.");
             if (!supabaseClient) {
                 const initialized = await initializeSupabase();
                 if (!initialized) {
-                    console.warn("Lower Third: Supabase init failed, using default.");
-                    updateLowerThirdContent(null); // Use default/placeholder
+                    console.warn(LOG_PREFIX, "Supabase init failed during load/listen, using default LT data.");
+                    updateLowerThirdContent(null);
                     return;
                 }
             }
 
+            console.log(LOG_PREFIX, "Attempting initial data load...");
             try {
                 const { data, error } = await supabaseClient
                     .from('overlay_configurations')
                     .select('config_data')
                     .eq('overlay_type', 'lower_third')
-                    .single();
+                    .maybeSingle();
 
-                if (error && error.code !== 'PGRST116') {
-                    console.error("Lower Third: Error loading data:", error);
+                if (error) {
+                    console.error(LOG_PREFIX, "Error loading initial data:", error);
                     updateLowerThirdContent(null);
                 } else if (data && data.config_data) {
+                    console.log(LOG_PREFIX, "Initial config loaded from DB:", data.config_data);
                     updateLowerThirdContent(data.config_data);
                 } else {
-                    updateLowerThirdContent(null); // No data in DB, use default
+                    console.log(LOG_PREFIX, "No initial config in DB or data malformed, using default.");
+                    updateLowerThirdContent(null);
                 }
             } catch (fetchError) {
-                console.error("Lower Third: Supabase fetch error:", fetchError);
+                console.error(LOG_PREFIX, "Supabase initial fetch error:", fetchError);
                 updateLowerThirdContent(null);
             }
+
+            if (lowerThirdChannel) {
+                console.log(LOG_PREFIX, "Removing existing Realtime channel before re-subscribing.");
+                try { await supabaseClient.removeChannel(lowerThirdChannel); } catch(e) { console.error(LOG_PREFIX, "Error removing old channel:", e); }
+                lowerThirdChannel = null;
+            }
+
+            console.log(LOG_PREFIX, "Attempting to subscribe to Realtime changes for 'lower_third'...");
+            lowerThirdChannel = supabaseClient
+                .channel('lt-config-changes')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'overlay_configurations', filter: 'overlay_type=eq.lower_third' },
+                    (payload) => {
+                        console.log(LOG_PREFIX, 'Realtime: Lower Third config change received! Payload:', payload);
+                        if (payload.eventType === 'DELETE' || !payload.new || !payload.new.config_data) {
+                            console.log(LOG_PREFIX, "Realtime: Delete event or no new data, using default LT.");
+                            updateLowerThirdContent(null);
+                        } else if (payload.new.config_data) {
+                            console.log(LOG_PREFIX, "Realtime: Applying new LT data:", payload.new.config_data);
+                            updateLowerThirdContent(payload.new.config_data);
+                        } else {
+                            console.log(LOG_PREFIX, "Realtime: New data malformed, using default LT.");
+                            updateLowerThirdContent(null);
+                        }
+                    }
+                )
+                .subscribe((status, err) => {
+                    console.log(LOG_PREFIX, `Realtime: Subscription status: ${status}`);
+                    if (status === 'SUBSCRIBED') console.log(LOG_PREFIX, 'Realtime: Subscribed to LT changes!');
+                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error(LOG_PREFIX, `Realtime: Subscription error: ${status}`, err);
+                    if (status === 'CLOSED') console.log(LOG_PREFIX, 'Realtime: Subscription closed.');
+                });
         }
-        loadContent();
+
+        loadAndListenForLowerThirdChanges();
+
+        window.addEventListener('beforeunload', async () => {
+            console.log(LOG_PREFIX, "beforeunload event.");
+            if (lowerThirdChannel && supabaseClient) {
+                console.log(LOG_PREFIX, "Attempting to remove Realtime channel on unload.");
+                try { await supabaseClient.removeChannel(lowerThirdChannel); } catch(e) { console.error(LOG_PREFIX, "Error removing channel on unload:", e); }
+            }
+        });
     </script>
 </body>
 </html>
