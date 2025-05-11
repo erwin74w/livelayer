@@ -21,7 +21,7 @@ html, body {
       Again, assuming ticker is ~50px high.
       So, position this 50px (ticker) + 20px (desired space) = 70px from the bottom.
     */
-    bottom: 70px;       /* NEW/MODIFIED */
+    bottom: 100px;       /* NEW/MODIFIED */
     left: 30px;         /* NEW/MODIFIED - or keep margin-left */
     /* margin: 0; remove if using top/left/bottom/right */
 
