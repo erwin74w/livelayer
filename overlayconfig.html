@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Overlay Configuration (Supabase)</title>
-    <!-- Add Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* ... Your existing styles ... */
         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
         .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         section { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
@@ -17,6 +15,7 @@
         textarea { min-height: 80px; }
         button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 5px; }
         button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
         button.secondary { background-color: #6c757d; }
         button.secondary:hover { background-color: #545b62; }
         .feedback { margin-top: 10px; padding: 10px; border-radius: 4px; font-size: 0.9em; }
@@ -24,13 +23,14 @@
         .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         #manualJsonContainer { margin-top: 15px; background-color: #e9ecef; padding: 10px; border-radius: 4px;}
         #manualJsonTextarea { min-height: 100px; background-color: #fff; }
+        #initError { color: red; font-weight: bold; padding: 10px; background-color: #ffe0e0; border: 1px solid red; border-radius: 4px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Overlay Configuration (Supabase)</h1>
+        <div id="initError" style="display:none;"></div>
         <p>Changes saved here will be reflected in your overlays.</p>
-        <p><strong>Important:</strong> For this MVP, data is saved publicly. Secure this with authentication for production.</p>
 
         <!-- Ticker Configuration -->
         <section id="tickerConfig">
@@ -39,7 +39,7 @@
             <textarea id="tickerMessagesInput" placeholder="Message 1\nMessage 2"></textarea>
             <label for="tickerSeparatorInput">Message Separator:</label>
             <input type="text" id="tickerSeparatorInput" value=" +++ ">
-            <button id="saveTickerButton">Save Ticker Config</button>
+            <button id="saveTickerButton" disabled>Save Ticker Config</button>
             <div id="tickerFeedback" class="feedback" style="display:none;"></div>
             <div id="manualJsonContainer" style="display:none;">
                 <p>If Supabase save fails, you can copy this JSON and update <code>overlay2/ticker-text.json</code> manually as a fallback:</p>
@@ -58,7 +58,7 @@
             <input type="text" id="ltFunctionInput" placeholder="Lead Developer">
             <label for="ltAffiliationInput">Affiliation/Company:</label>
             <input type="text" id="ltAffiliationInput" placeholder="Awesome Inc.">
-            <button id="saveLowerThirdButton">Save Lower Third Config</button>
+            <button id="saveLowerThirdButton" disabled>Save Lower Third Config</button>
             <div id="lowerThirdFeedback" class="feedback" style="display:none;"></div>
         </section>
 
@@ -67,21 +67,14 @@
             <h2>Logo (Overlay 1) Settings</h2>
             <label for="logoUrlInput">Logo Image URL (e.g., <code>../pictures/new_logo.png</code> or full https URL):</label>
             <input type="text" id="logoUrlInput" placeholder="../pictures/overlay1.png">
-            <button id="saveLogoButton">Save Logo Config</button>
+            <button id="saveLogoButton" disabled>Save Logo Config</button>
             <div id="logoFeedback" class="feedback" style="display:none;"></div>
         </section>
     </div>
 
     <script>
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your Supabase project URL
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your Supabase anon key
-
-        if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') {
-            alert("Please configure SUPABASE_URL and SUPABASE_ANON_KEY in overlayconfig.html");
-        }
-
-        const { createClient } = supabase;
-        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let supabaseClient = null;
+        const initErrorEl = document.getElementById('initError');
 
         // --- Generic Feedback Function ---
         function showFeedback(element, message, isSuccess) {
@@ -91,64 +84,58 @@
             setTimeout(() => { element.style.display = 'none'; }, 5000);
         }
 
+        async function initializeSupabase() {
+            try {
+                const response = await fetch('keys.json'); // Path relative to overlayconfig.html
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status} fetching keys.json`);
+                }
+                const keys = await response.json();
+
+                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL")) {
+                    throw new Error("Supabase URL or Anon Key is missing or not configured in keys.json.");
+                }
+
+                const { createClient } = supabase;
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+                return true;
+            } catch (error) {
+                console.error("Failed to initialize Supabase:", error);
+                initErrorEl.textContent = `Error initializing Supabase: ${error.message}. Configuration page will not function correctly. Please check keys.json.`;
+                initErrorEl.style.display = 'block';
+                return false;
+            }
+        }
+
         // --- Ticker Elements and Functions ---
         const tickerMessagesInputEl = document.getElementById('tickerMessagesInput');
         const tickerSeparatorInputEl = document.getElementById('tickerSeparatorInput');
         const saveTickerButtonEl = document.getElementById('saveTickerButton');
         const tickerFeedbackEl = document.getElementById('tickerFeedback');
-        // Fallback JSON elements
         const manualJsonContainerEl = document.getElementById('manualJsonContainer');
         const manualJsonTextareaEl = document.getElementById('manualJsonTextarea');
         const copyManualJsonButtonEl = document.getElementById('copyManualJsonButton');
         const copyManualFeedbackEl = document.getElementById('copyManualFeedback');
 
-
         async function loadTickerConfig() {
-            const { data, error } = await supabaseClient
-                .from('overlay_configurations')
-                .select('config_data')
-                .eq('overlay_type', 'ticker')
-                .single(); // .single() because we expect only one row for 'ticker'
-
-            if (error && error.code !== 'PGRST116') { // PGRST116: "Query returned 0 rows" - not an error if it's the first time
-                console.error('Error loading ticker config:', error);
-                showFeedback(tickerFeedbackEl, `Error loading ticker: ${error.message}`, false);
-            } else if (data && data.config_data) {
-                tickerMessagesInputEl.value = data.config_data.messages.join('\n');
-                tickerSeparatorInputEl.value = data.config_data.separator;
-            }
+            if (!supabaseClient) return;
+            const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'ticker').single();
+            if (error && error.code !== 'PGRST116') { console.error('Error loading ticker config:', error); showFeedback(tickerFeedbackEl, `Error loading: ${error.message}`, false); }
+            else if (data && data.config_data) { tickerMessagesInputEl.value = data.config_data.messages.join('\n'); tickerSeparatorInputEl.value = data.config_data.separator; }
         }
-
         saveTickerButtonEl.addEventListener('click', async () => {
+            if (!supabaseClient) { showFeedback(tickerFeedbackEl, 'Supabase not initialized.', false); return; }
             const messages = tickerMessagesInputEl.value.trim().split('\n').map(s => s.trim()).filter(s => s);
             const separator = tickerSeparatorInputEl.value.trim();
             const configData = { messages, separator };
-
-            // Show fallback JSON in case Supabase save fails
-            manualJsonTextareaEl.value = JSON.stringify(configData, null, 2);
-            manualJsonContainerEl.style.display = 'block';
-
-            const { error } = await supabaseClient
-                .from('overlay_configurations')
-                .upsert({ overlay_type: 'ticker', config_data: configData }, { onConflict: 'overlay_type' });
-
-            if (error) {
-                console.error('Error saving ticker config:', error);
-                showFeedback(tickerFeedbackEl, `Error saving: ${error.message}. Use fallback JSON below if needed.`, false);
-            } else {
-                showFeedback(tickerFeedbackEl, 'Ticker configuration saved successfully!', true);
-                manualJsonContainerEl.style.display = 'none'; // Hide if successful
-            }
+            manualJsonTextareaEl.value = JSON.stringify(configData, null, 2); manualJsonContainerEl.style.display = 'block';
+            const { error } = await supabaseClient.from('overlay_configurations').upsert({ overlay_type: 'ticker', config_data: configData }, { onConflict: 'overlay_type' });
+            if (error) { console.error('Error saving ticker config:', error); showFeedback(tickerFeedbackEl, `Error saving: ${error.message}. Fallback JSON available.`, false); }
+            else { showFeedback(tickerFeedbackEl, 'Ticker config saved!', true); manualJsonContainerEl.style.display = 'none'; }
         });
-
-        copyManualJsonButtonEl.addEventListener('click', async () => {
-            try {
-                await navigator.clipboard.writeText(manualJsonTextareaEl.value);
-                copyManualFeedbackEl.textContent = 'Copied!';
-                setTimeout(() => { copyManualFeedbackEl.textContent = ''; }, 2000);
-            } catch (err) {
-                copyManualFeedbackEl.textContent = 'Failed to copy.';
-            }
+        copyManualJsonButtonEl.addEventListener('click', async () => { /* ... (same as before) ... */
+            try { await navigator.clipboard.writeText(manualJsonTextareaEl.value); copyManualFeedbackEl.textContent = 'Copied!'; setTimeout(() => { copyManualFeedbackEl.textContent = ''; }, 2000); }
+            catch (err) { copyManualFeedbackEl.textContent = 'Failed to copy.'; }
         });
 
 
@@ -160,39 +147,17 @@
         const lowerThirdFeedbackEl = document.getElementById('lowerThirdFeedback');
 
         async function loadLowerThirdConfig() {
-            const { data, error } = await supabaseClient
-                .from('overlay_configurations')
-                .select('config_data')
-                .eq('overlay_type', 'lower_third')
-                .single();
-
-            if (error && error.code !== 'PGRST116') {
-                console.error('Error loading lower third config:', error);
-                showFeedback(lowerThirdFeedbackEl, `Error loading: ${error.message}`, false);
-            } else if (data && data.config_data) {
-                ltNameInputEl.value = data.config_data.name || '';
-                ltFunctionInputEl.value = data.config_data.function || '';
-                ltAffiliationInputEl.value = data.config_data.affiliation || '';
-            }
+            if (!supabaseClient) return;
+            const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'lower_third').single();
+            if (error && error.code !== 'PGRST116') { console.error('Error loading lower third config:', error); showFeedback(lowerThirdFeedbackEl, `Error loading: ${error.message}`, false); }
+            else if (data && data.config_data) { ltNameInputEl.value = data.config_data.name || ''; ltFunctionInputEl.value = data.config_data.function || ''; ltAffiliationInputEl.value = data.config_data.affiliation || ''; }
         }
-
         saveLowerThirdButtonEl.addEventListener('click', async () => {
-            const configData = {
-                name: ltNameInputEl.value.trim(),
-                function: ltFunctionInputEl.value.trim(),
-                affiliation: ltAffiliationInputEl.value.trim()
-            };
-
-            const { error } = await supabaseClient
-                .from('overlay_configurations')
-                .upsert({ overlay_type: 'lower_third', config_data: configData }, { onConflict: 'overlay_type' });
-
-            if (error) {
-                console.error('Error saving lower third config:', error);
-                showFeedback(lowerThirdFeedbackEl, `Error saving: ${error.message}`, false);
-            } else {
-                showFeedback(lowerThirdFeedbackEl, 'Lower Third configuration saved successfully!', true);
-            }
+            if (!supabaseClient) { showFeedback(lowerThirdFeedbackEl, 'Supabase not initialized.', false); return; }
+            const configData = { name: ltNameInputEl.value.trim(), function: ltFunctionInputEl.value.trim(), affiliation: ltAffiliationInputEl.value.trim() };
+            const { error } = await supabaseClient.from('overlay_configurations').upsert({ overlay_type: 'lower_third', config_data: configData }, { onConflict: 'overlay_type' });
+            if (error) { console.error('Error saving lower third config:', error); showFeedback(lowerThirdFeedbackEl, `Error saving: ${error.message}`, false); }
+            else { showFeedback(lowerThirdFeedbackEl, 'Lower Third config saved!', true); }
         });
 
         // --- Logo Elements and Functions ---
@@ -201,44 +166,35 @@
         const logoFeedbackEl = document.getElementById('logoFeedback');
 
         async function loadLogoConfig() {
-            const { data, error } = await supabaseClient
-                .from('overlay_configurations')
-                .select('config_data')
-                .eq('overlay_type', 'logo')
-                .single();
-
-            if (error && error.code !== 'PGRST116') {
-                console.error('Error loading logo config:', error);
-                showFeedback(logoFeedbackEl, `Error loading: ${error.message}`, false);
-            } else if (data && data.config_data) {
-                logoUrlInputEl.value = data.config_data.url || '../pictures/overlay1.png';
-            }
+            if (!supabaseClient) return;
+            const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'logo').single();
+            if (error && error.code !== 'PGRST116') { console.error('Error loading logo config:', error); showFeedback(logoFeedbackEl, `Error loading: ${error.message}`, false); }
+            else if (data && data.config_data) { logoUrlInputEl.value = data.config_data.url || '../pictures/overlay1.png'; }
+            else { logoUrlInputEl.value = '../pictures/overlay1.png'; } // Default if not in DB
         }
-
         saveLogoButtonEl.addEventListener('click', async () => {
+            if (!supabaseClient) { showFeedback(logoFeedbackEl, 'Supabase not initialized.', false); return; }
             const configData = { url: logoUrlInputEl.value.trim() };
-            if (!configData.url) {
-                showFeedback(logoFeedbackEl, 'Logo URL cannot be empty.', false);
-                return;
-            }
-            const { error } = await supabaseClient
-                .from('overlay_configurations')
-                .upsert({ overlay_type: 'logo', config_data: configData }, { onConflict: 'overlay_type' });
-
-            if (error) {
-                console.error('Error saving logo config:', error);
-                showFeedback(logoFeedbackEl, `Error saving: ${error.message}`, false);
-            } else {
-                showFeedback(logoFeedbackEl, 'Logo configuration saved successfully!', true);
-            }
+            if (!configData.url) { showFeedback(logoFeedbackEl, 'Logo URL cannot be empty.', false); return; }
+            const { error } = await supabaseClient.from('overlay_configurations').upsert({ overlay_type: 'logo', config_data: configData }, { onConflict: 'overlay_type' });
+            if (error) { console.error('Error saving logo config:', error); showFeedback(logoFeedbackEl, `Error saving: ${error.message}`, false); }
+            else { showFeedback(logoFeedbackEl, 'Logo config saved!', true); }
         });
 
-        // --- Initial Load ---
-        document.addEventListener('DOMContentLoaded', () => {
-            if (supabaseClient) {
+        // --- Initial Load and Button Enablement ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const initialized = await initializeSupabase();
+            if (initialized) {
+                initErrorEl.style.display = 'none';
+                saveTickerButtonEl.disabled = false;
+                saveLowerThirdButtonEl.disabled = false;
+                saveLogoButtonEl.disabled = false;
                 loadTickerConfig();
                 loadLowerThirdConfig();
                 loadLogoConfig();
+            } else {
+                // Buttons remain disabled
+                console.warn("Supabase not initialized. Config page features are limited.");
             }
         });
     </script>
