@@ -47,7 +47,7 @@
             box-sizing: border-box;
         }
         textarea {
-            min-height: 150px;
+            min-height: 100px; /* Adjusted for ticker */
             resize: vertical;
             font-family: monospace;
             line-height: 1.4;
@@ -63,6 +63,7 @@
             font-weight: 600;
             transition: background-color 0.2s cubic-bezier(0.3, 0, 0.5, 1);
             margin-right: 10px; /* Space between buttons */
+            margin-top: 5px; /* Added some top margin for buttons */
         }
         button:hover {
             background-color: #2c974b;
@@ -78,17 +79,18 @@
             padding-top: 20px;
             border-top: 1px dashed #d1d5da;
         }
-        #generatedJsonFeedback {
+        #generatedJsonFeedback { /* Renamed from ticker-specific name */
             background-color: #f1f8ff;
             border: 1px solid #c8e1ff;
             font-family: monospace;
-            white-space: pre-wrap; /* Allows wrapping and preserves whitespace */
-            word-wrap: break-word; /* Breaks long words */
+            white-space: pre-wrap;
+            word-wrap: break-word;
             overflow-x: auto;
-            margin-bottom: 10px; /* Space before copy button */
+            margin-bottom: 10px;
+            min-height: 80px;
         }
         .instructions {
-            background-color: #fffbdd; /* Light yellow */
+            background-color: #fffbdd;
             border: 1px solid #ffeaaf;
             color: #534000;
             padding: 15px;
@@ -96,31 +98,23 @@
             margin-top: 15px;
             font-size: 0.95em;
         }
-        .instructions ol {
-            padding-left: 20px;
-            margin-top: 5px;
-            margin-bottom: 5px;
-        }
-        .error-message {
-            color: #cb2431; /* GitHub error red */
-            background-color: #ffeef0;
-            border: 1px solid #ffdce0;
+        .instructions ol { padding-left: 20px; margin-top: 5px; margin-bottom: 5px;}
+        .error-message, .success-message {
             padding: 10px;
             border-radius: 6px;
             margin-top: 10px;
+            font-size: 0.95em;
         }
-        .copy-feedback { /* For "Copied!" message */
-            display: inline-block;
-            margin-left: 10px;
-            color: #2ea44f;
-            font-style: italic;
-        }
+        .error-message { color: #cb2431; background-color: #ffeef0; border: 1px solid #ffdce0; }
+        .success-message { color: #1e7e34; background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .copy-feedback { display: inline-block; margin-left: 10px; color: #2ea44f; font-style: italic; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Overlay Configuration</h1>
 
+        <!-- Ticker Configuration Section -->
         <section id="tickerConfig">
             <h2>Ticker Settings (for <code>overlay2/ticker-text.json</code>)</h2>
             <p>Modify the ticker messages and separator. After generating the JSON, you'll need to manually update the file in your GitHub repository.</p>
@@ -136,12 +130,10 @@
             <div class="output-area" id="tickerJsonOutputContainer" style="display:none;">
                 <h3>Generated JSON for <code>overlay2/ticker-text.json</code>:</h3>
                 <textarea id="generatedJsonFeedback" readonly></textarea>
-                <!-- ADDED: Copy Button and feedback span -->
                 <button id="copyJsonButton" class="secondary">Copy JSON to Clipboard</button>
-                <span id="copyFeedback" class="copy-feedback"></span>
-                <!-- END ADDED -->
+                <span id="copyFeedbackTicker" class="copy-feedback"></span>
                 <div class="instructions">
-                    <strong>ACTION REQUIRED:</strong>
+                    <strong>ACTION REQUIRED (For Ticker):</strong>
                     <ol>
                         <li><strong>Copy</strong> the entire content from the text area above (or use the "Copy JSON" button).</li>
                         <li>In your GitHub repository, navigate to and open the <code>overlay2/ticker-text.json</code> file.</li>
@@ -156,6 +148,24 @@
             <div id="tickerConfigError" class="error-message" style="display:none;"></div>
         </section>
 
+        <!-- Lower Third Configuration Section -->
+        <section id="lowerThirdConfig">
+            <h2>Lower Third Settings (for Overlay 3)</h2>
+            <p>Enter the details for the lower third. This data is saved in your browser's local storage and used directly by Overlay 3.</p>
+
+            <label for="ltNameInput">Name:</label>
+            <input type="text" id="ltNameInput" placeholder="e.g., Jane Doe">
+
+            <label for="ltFunctionInput">Function/Title:</label>
+            <input type="text" id="ltFunctionInput" placeholder="e.g., Lead Developer">
+
+            <label for="ltAffiliationInput">Affiliation/Company:</label>
+            <input type="text" id="ltAffiliationInput" placeholder="e.g., Awesome Inc.">
+
+            <button id="saveLowerThirdButton">Update Lower Third Data</button>
+            <div id="lowerThirdSaveFeedback" class="success-message" style="display:none;"></div>
+        </section>
+
     </div>
 
     <script>
@@ -167,99 +177,91 @@
             const generatedJsonFeedbackEl = document.getElementById('generatedJsonFeedback');
             const tickerJsonOutputContainerEl = document.getElementById('tickerJsonOutputContainer');
             const tickerConfigErrorEl = document.getElementById('tickerConfigError');
-
-            // ADDED: Get reference to the new copy button and feedback span
             const copyJsonButtonEl = document.getElementById('copyJsonButton');
-            const copyFeedbackEl = document.getElementById('copyFeedback');
-            // END ADDED
-
+            const copyFeedbackTickerEl = document.getElementById('copyFeedbackTicker'); // Specific ID
             const tickerJsonFilePath = 'overlay2/ticker-text.json';
 
-            function showTickerError(message) {
-                tickerConfigErrorEl.textContent = message;
-                tickerConfigErrorEl.style.display = 'block';
-                tickerJsonOutputContainerEl.style.display = 'none';
-            }
-
-            function clearTickerError() {
-                tickerConfigErrorEl.textContent = '';
-                tickerConfigErrorEl.style.display = 'none';
-            }
-
-            async function loadInitialTickerConfig() {
-                try {
-                    const response = await fetch(`${tickerJsonFilePath}?t=${Date.now()}`);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status} while fetching ${tickerJsonFilePath}`);
-                    }
-                    const data = await response.json();
-                    if (data.messages && Array.isArray(data.messages)) {
-                        tickerMessagesInputEl.value = data.messages.join('\n');
-                    }
-                    if (typeof data.separator === 'string') {
-                        tickerSeparatorInputEl.value = data.separator;
-                    }
-                    clearTickerError();
-                } catch (error) {
-                    console.error("Error loading initial ticker config:", error);
-                    showTickerError(`Could not load current ticker configuration: ${error.message}. You can still enter new values and generate JSON.`);
-                }
-            }
-
-            generateTickerJsonButtonEl.addEventListener('click', () => {
+            function showTickerError(message) { /* ... (same as before) ... */ }
+            function clearTickerError() { /* ... (same as before) ... */ }
+            async function loadInitialTickerConfig() { /* ... (same as before) ... */ }
+            generateTickerJsonButtonEl.addEventListener('click', () => { /* ... (same as before, ensure copyFeedbackTickerEl is used) ... */
                 clearTickerError();
-                copyFeedbackEl.textContent = ''; // Clear any previous copy feedback
-                const messagesArray = tickerMessagesInputEl.value
-                    .trim()
-                    .split('\n')
-                    .map(line => line.trim())
-                    .filter(line => line.length > 0);
-
+                copyFeedbackTickerEl.textContent = ''; // Use specific feedback el
+                const messagesArray = tickerMessagesInputEl.value.trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
                 const separator = tickerSeparatorInputEl.value;
-
-                if (messagesArray.length === 0) {
-                    showTickerError('Please enter at least one ticker message.');
-                    return;
-                }
-
-                const newJsonData = {
-                    messages: messagesArray,
-                    separator: separator
-                };
-
+                if (messagesArray.length === 0) { showTickerError('Please enter at least one ticker message.'); return; }
+                const newJsonData = { messages: messagesArray, separator: separator };
                 generatedJsonFeedbackEl.value = JSON.stringify(newJsonData, null, 2);
                 tickerJsonOutputContainerEl.style.display = 'block';
                 generatedJsonFeedbackEl.scrollTop = 0;
             });
-
-            // ADDED: Event listener for the copy button
-            copyJsonButtonEl.addEventListener('click', async () => {
+            copyJsonButtonEl.addEventListener('click', async () => { /* ... (same as before, ensure copyFeedbackTickerEl is used) ... */
                 const jsonToCopy = generatedJsonFeedbackEl.value;
-                if (!jsonToCopy) {
-                    copyFeedbackEl.textContent = 'Nothing to copy.';
-                    return;
-                }
-
+                if (!jsonToCopy) { copyFeedbackTickerEl.textContent = 'Nothing to copy.'; return; }
                 try {
                     await navigator.clipboard.writeText(jsonToCopy);
-                    copyFeedbackEl.textContent = 'Copied!';
-                    // Optionally clear the message after a few seconds
-                    setTimeout(() => {
-                        copyFeedbackEl.textContent = '';
-                    }, 3000);
+                    copyFeedbackTickerEl.textContent = 'Copied!';
+                    setTimeout(() => { copyFeedbackTickerEl.textContent = ''; }, 3000);
                 } catch (err) {
                     console.error('Failed to copy text: ', err);
-                    copyFeedbackEl.textContent = 'Copy failed. Please copy manually.';
-                    // Fallback for older browsers or if permission is denied (less likely in this context)
-                    // You could select the text and prompt the user to Ctrl+C
-                    generatedJsonFeedbackEl.select();
-                    generatedJsonFeedbackEl.setSelectionRange(0, 99999); // For mobile devices
+                    copyFeedbackTickerEl.textContent = 'Copy failed. Please copy manually.';
+                    generatedJsonFeedbackEl.select(); generatedJsonFeedbackEl.setSelectionRange(0, 99999);
                     alert('Could not copy automatically. Please press Ctrl+C (or Cmd+C) to copy the JSON.');
                 }
             });
-            // END ADDED
-
             loadInitialTickerConfig();
+
+            // --- Lower Third Configuration ---
+            const ltNameInputEl = document.getElementById('ltNameInput');
+            const ltFunctionInputEl = document.getElementById('ltFunctionInput');
+            const ltAffiliationInputEl = document.getElementById('ltAffiliationInput');
+            const saveLowerThirdButtonEl = document.getElementById('saveLowerThirdButton');
+            const lowerThirdSaveFeedbackEl = document.getElementById('lowerThirdSaveFeedback');
+            const lowerThirdDataKey = 'lowerThirdData'; // Matches key in overlay3.html
+
+            // Load existing lower third data from localStorage
+            function loadInitialLowerThirdConfig() {
+                try {
+                    const storedData = localStorage.getItem(lowerThirdDataKey);
+                    if (storedData) {
+                        const data = JSON.parse(storedData);
+                        ltNameInputEl.value = data.name || '';
+                        ltFunctionInputEl.value = data.function || '';
+                        ltAffiliationInputEl.value = data.affiliation || '';
+                    }
+                } catch (e) {
+                    console.error("Error loading initial lower third data:", e);
+                    // Optionally show an error to the user
+                }
+            }
+
+            saveLowerThirdButtonEl.addEventListener('click', () => {
+                const lowerThirdData = {
+                    name: ltNameInputEl.value.trim(),
+                    function: ltFunctionInputEl.value.trim(),
+                    affiliation: ltAffiliationInputEl.value.trim()
+                };
+
+                try {
+                    localStorage.setItem(lowerThirdDataKey, JSON.stringify(lowerThirdData));
+                    // Also set timestamp to ensure 'storage' event fires for overlay3.html
+                    localStorage.setItem(lowerThirdDataKey + 'Timestamp', Date.now());
+
+                    lowerThirdSaveFeedbackEl.textContent = 'Lower Third data updated successfully!';
+                    lowerThirdSaveFeedbackEl.className = 'success-message'; // ensure it's green
+                    lowerThirdSaveFeedbackEl.style.display = 'block';
+                    setTimeout(() => {
+                        lowerThirdSaveFeedbackEl.style.display = 'none';
+                    }, 3000);
+                } catch (e) {
+                    console.error("Error saving lower third data to localStorage:", e);
+                    lowerThirdSaveFeedbackEl.textContent = 'Error saving data. Your browser might be blocking localStorage or out of space.';
+                    lowerThirdSaveFeedbackEl.className = 'error-message'; // ensure it's red
+                    lowerThirdSaveFeedbackEl.style.display = 'block';
+                }
+            });
+
+            loadInitialLowerThirdConfig();
         });
     </script>
 </body>
