@@ -4,41 +4,62 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Livestream Overlay 1 (Logo)</title>
-    <link rel="stylesheet" href="overlay.css"> <!-- Assuming overlay.css defines #logo position -->
+    <link rel="stylesheet" href="overlay.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <img id="logo" src="" alt="Stream Logo"> <!-- Start with empty src -->
+    <img id="logo" src="" alt="Stream Logo">
 
     <script>
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace
-
         const logoImg = document.getElementById('logo');
         const defaultLogoUrl = '../pictures/overlay1.png'; // Fallback
+        let supabaseClient = null;
+
+        async function initializeSupabase() {
+            try {
+                const response = await fetch('../keys.json'); // Path relative to this HTML file
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status} fetching keys.json`);
+                const keys = await response.json();
+                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL")) {
+                    throw new Error("Supabase URL or Anon Key is missing/not configured in keys.json.");
+                }
+                const { createClient } = supabase;
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+                return true;
+            } catch (error) {
+                console.error("Logo Overlay: Failed to initialize Supabase:", error.message);
+                return false;
+            }
+        }
 
         async function loadLogo() {
-            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !supabase) { // Check if supabase var exists
-                logoImg.src = defaultLogoUrl;
-                console.warn("Supabase not configured for logo, using default.");
-                return;
+            if (!supabaseClient) {
+                const initialized = await initializeSupabase();
+                if (!initialized) {
+                    logoImg.src = defaultLogoUrl;
+                    console.warn("Logo Overlay: Supabase init failed, using default.");
+                    return;
+                }
             }
-            const { createClient } = supabase;
-            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            const { data, error } = await supabaseClient
-                .from('overlay_configurations')
-                .select('config_data')
-                .eq('overlay_type', 'logo')
-                .single();
+            try {
+                const { data, error } = await supabaseClient
+                    .from('overlay_configurations')
+                    .select('config_data')
+                    .eq('overlay_type', 'logo')
+                    .single();
 
-            if (error && error.code !== 'PGRST116') {
-                console.error('Error fetching logo config:', error);
+                if (error && error.code !== 'PGRST116') {
+                    console.error('Logo Overlay: Error fetching config:', error);
+                    logoImg.src = defaultLogoUrl;
+                } else if (data && data.config_data && data.config_data.url) {
+                    logoImg.src = data.config_data.url;
+                } else {
+                    logoImg.src = defaultLogoUrl;
+                }
+            } catch (fetchError) {
+                console.error('Logo Overlay: Supabase fetch error:', fetchError);
                 logoImg.src = defaultLogoUrl;
-            } else if (data && data.config_data && data.config_data.url) {
-                logoImg.src = data.config_data.url;
-            } else {
-                logoImg.src = defaultLogoUrl; // Use default if no URL in DB
             }
         }
         loadLogo();
