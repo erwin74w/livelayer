@@ -3,71 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ticker Overlay</title>
+    <title>Ticker Overlay (Supabase)</title>
     <link rel="stylesheet" href="overlay2.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <div id="ticker-container">
-        <div id="ticker-text">
-            <!-- Ticker content will be loaded here by JavaScript -->
-            Loading ticker...
-        </div>
+        <div id="ticker-text">Loading ticker...</div>
     </div>
 
     <script>
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace
+
+        const tickerTextElement = document.getElementById('ticker-text');
+        const defaultTickerData = {
+            messages: ["Ticker loading or not configured..."],
+            separator: " +++ "
+        };
+
+        function displayTicker(data) {
+            const separator = data.separator || " • ";
+            let fullTickerString = data.messages.join(separator);
+            tickerTextElement.textContent = fullTickerString + separator + fullTickerString; // Duplicate for seamless scroll
+            // Optional: adjustAnimationSpeed(); // If you have this function
+        }
+
         async function loadTickerContent() {
-            const tickerTextElement = document.getElementById('ticker-text');
-            try {
-                const response = await fetch('ticker-text.json'); // Relative path to JSON
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !supabase) {
+                console.warn("Supabase not configured for ticker, using default.");
+                displayTicker(defaultTickerData);
+                return;
+            }
+            const { createClient } = supabase;
+            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-                if (data && data.messages && data.messages.length > 0) {
-                    const separator = data.separator || " • "; // Default separator if not provided
-                    // Join all messages for a continuous scroll.
-                    // To make the loop seamless, we append the start of the messages again.
-                    // The length of this appended part should ideally be enough to cover the screen width.
-                    let fullTickerString = data.messages.join(separator);
-                    // For a more seamless loop, duplicate the content.
-                    // The animation handles scrolling one "block" of this.
-                    tickerTextElement.textContent = fullTickerString + separator + fullTickerString;
+            const { data, error } = await supabaseClient
+                .from('overlay_configurations')
+                .select('config_data')
+                .eq('overlay_type', 'ticker')
+                .single();
 
-                } else {
-                    tickerTextElement.textContent = "No ticker messages found.";
-                }
-            } catch (error) {
-                console.error("Could not load ticker content:", error);
+            if (error && error.code !== 'PGRST116') {
+                console.error("Could not load ticker content from Supabase:", error);
                 tickerTextElement.textContent = "Error loading ticker.";
+            } else if (data && data.config_data && data.config_data.messages && data.config_data.messages.length > 0) {
+                displayTicker(data.config_data);
+            } else {
+                console.log("No ticker messages found in Supabase or data format incorrect, using default.");
+                displayTicker(defaultTickerData);
             }
         }
+        // Optional: function adjustAnimationSpeed() { ... }
 
-        // Adjust animation duration based on text length for more consistent speed
-        // This is an optional refinement.
-        function adjustAnimationSpeed() {
-            const tickerTextElement = document.getElementById('ticker-text');
-            const textWidth = tickerTextElement.offsetWidth; // Get actual rendered width
-            const containerWidth = tickerTextElement.parentElement.offsetWidth;
+        loadTickerContent();
 
-            // If the text is very short, it might not need to scroll or scroll very slowly.
-            // This basic example assumes text is longer than the container.
-            // A simple heuristic: 50 pixels per second.
-            if (textWidth > 0) {
-                const duration = textWidth / 50; // pixels / (pixels/second) = seconds
-                 // The animation scrolls two full widths because of the duplication for seamlessness.
-                tickerTextElement.style.animationDuration = (duration * 2) + 's';
-            }
+        // FOR REAL-TIME UPDATES (Advanced - MVP+):
+        // You would subscribe to changes here if you want the ticker to update live
+        // without the overlay needing to be re-shown or the page refreshed.
+        /*
+        if (supabaseClient) { // Ensure client is initialized
+            const channel = supabaseClient
+                .channel('ticker-updates')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_configurations', filter: 'overlay_type=eq.ticker' }, payload => {
+                    console.log('Ticker config change received!', payload);
+                    if (payload.new && payload.new.config_data) {
+                        displayTicker(payload.new.config_data);
+                    } else if (payload.eventType === 'DELETE' || !payload.new.config_data) {
+                        displayTicker(defaultTickerData); // Handle deletion or empty config
+                    }
+                })
+                .subscribe();
         }
-
-
-        // Load content and then potentially adjust speed
-        loadTickerContent().then(() => {
-            // Give the browser a moment to render the text and get its width
-            requestAnimationFrame(() => {
-                requestAnimationFrame(adjustAnimationSpeed); // Call adjustAnimationSpeed after text is rendered
-            });
-        });
+        */
     </script>
 </body>
 </html>
