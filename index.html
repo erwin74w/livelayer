@@ -5,37 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Stream Overlay</title>
     <style>
-        /* Make the entire HTML document and body transparent */
         html, body {
-            background-color: transparent !important; /* Ensure transparency */
+            background-color: transparent !important;
             margin: 0;
             padding: 0;
-            width: 100%;    /* Fill the container/viewport */
-            height: 100%;   /* Fill the container/viewport */
-            overflow: hidden; /* Prevent scrollbars */
-        }
-
-        /* Style the iframe to be full screen and transparent */
-        iframe {
-            display: block; /* Removes potential small gap underneath */
             width: 100%;
             height: 100%;
-            border: none; /* Crucial: remove iframe border */
-            background-color: transparent; /* Ensure iframe's own background is transparent */
+            overflow: hidden;
+        }
+        iframe {
+            display: block; /* Default to block, will be changed by JS */
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: transparent;
+        }
+        .hidden {
+            display: none !important; /* Ensure it's hidden */
         }
     </style>
 </head>
 <body>
-    <!--
-        This iframe will load overlay1.html.
-        The iframe itself is transparent, and its content (overlay1.html)
-        is also designed to be transparent except for the logo.
-    -->
     <iframe
+        id="overlayFrame"
         src="overlay1/overlay1.html"
         allowtransparency="true"
         scrolling="no"
         frameborder="0"
     ></iframe>
+
+    <script>
+        const overlayFrame = document.getElementById('overlayFrame');
+        const overlayStateKey = 'overlay1Visibility'; // Same key as in console.html
+
+        function applyVisibility(state) {
+            if (state === 'show') {
+                overlayFrame.classList.remove('hidden');
+            } else { // 'hide' or any other value defaults to hidden
+                overlayFrame.classList.add('hidden');
+            }
+        }
+
+        // 1. Check localStorage on initial load
+        const initialState = localStorage.getItem(overlayStateKey);
+        if (initialState) {
+            applyVisibility(initialState);
+        } else {
+            // Default state if nothing is in localStorage (e.g., first time)
+            applyVisibility('hide'); // Or 'show' if you want it visible by default
+            localStorage.setItem(overlayStateKey, 'hide'); // Set default in storage
+            localStorage.setItem(overlayStateKey + 'Timestamp', Date.now());
+        }
+
+        // 2. Listen for changes from console.html
+        window.addEventListener('storage', (event) => {
+            // Check if the key is the one we care about (overlayStateKey or its timestamp)
+            // We mainly react to changes in overlayStateKey itself.
+            if (event.key === overlayStateKey) {
+                if (event.newValue) {
+                    applyVisibility(event.newValue);
+                } else {
+                    // Key was removed or set to null, treat as hidden
+                    applyVisibility('hide');
+                }
+            }
+        });
+    </script>
 </body>
 </html>
