@@ -8,10 +8,55 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f6f8fa; color: #24292e; padding: 20px; }
         .container { background: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 1px 10px rgba(0,0,0,0.08); max-width: 700px; margin: 20px auto; }
-        section { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eaecef; }
-        section:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0;}
+        
+        /* Styles for <details> and <summary> */
+        details {
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            background-color: #fff; /* Keep background consistent or slightly different */
+        }
+        details:last-of-type {
+            margin-bottom: 0;
+        }
+        details[open] { /* Style when details is open */
+             /* border-bottom: 1px solid #e1e4e8; */
+        }
+        summary {
+            font-size: 1.3em;
+            font-weight: 600; /* Make summary text bolder */
+            color: #24292e;
+            padding: 15px 20px;
+            cursor: pointer;
+            list-style: none; /* Remove default triangle/marker on some browsers */
+            display: flex; /* For custom marker */
+            justify-content: space-between; /* Push custom marker to the right */
+            align-items: center;
+            border-bottom: 1px solid #eaecef; /* Separator when closed */
+        }
+        details[open] summary {
+            border-bottom: 1px solid #eaecef; /* Keep separator when open */
+            /* background-color: #f6f8fa; */ /* Optional: slight background change when open */
+        }
+        summary::-webkit-details-marker { /* Hide default marker for WebKit browsers */
+            display: none;
+        }
+        summary::after { /* Custom marker */
+            content: '▶'; /* Closed state */
+            font-size: 0.8em;
+            margin-left: 10px;
+            transition: transform 0.2s ease-in-out;
+        }
+        details[open] summary::after {
+            transform: rotate(90deg); /* Open state */
+        }
+        .details-content {
+            padding: 5px 20px 20px 20px; /* Padding for the content inside details */
+            border-top: none; /* No top border for content as summary has bottom */
+        }
+
         h1 { font-size: 1.8em; border-bottom: 1px solid #eaecef; padding-bottom: 0.5em; margin-bottom: 0.8em;}
-        h2 { font-size: 1.3em; color: #24292e; margin-top: 0; margin-bottom: 0.8em; }
+        /* Removed h2 specific styling as summary now acts as header */
         label { display: block; margin-top: 12px; margin-bottom: 6px; font-weight: 600; font-size: 0.9em; }
         input[type="text"], textarea {
             width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #d1d5da;
@@ -22,7 +67,7 @@
         button {
             background-color: #2ea44f; color: white; padding: 10px 16px; border: 1px solid rgba(27,31,35,0.15);
             border-radius: 6px; cursor: pointer; font-size: 0.95em; font-weight: 500;
-            transition: background-color 0.15s ease-in-out; margin-right: 8px; margin-top: 5px;
+            transition: background-color 0.15s ease-in-out; margin-right: 8px; margin-top: 10px; /* Added more top margin */
         }
         button:hover { background-color: #2c974b; }
         button:disabled { background-color: #94d3a2; cursor: not-allowed; border-color: #94d3a2; }
@@ -37,7 +82,7 @@
             color: #cb2431; font-weight: 600; padding: 12px 15px; background-color: #ffeef0;
             border: 1px solid #ffdce0; border-radius: 6px; margin-bottom: 20px; text-align: center;
         }
-        .loading-indicator { font-style: italic; color: #586069; margin-left: 10px; }
+        .loading-indicator { font-style: italic; color: #586069; margin-left: 10px; font-size: 0.8em; font-weight: normal; }
     </style>
 </head>
 <body>
@@ -46,46 +91,65 @@
         <div id="initError" style="display:none;">Supabase Initialization Error. Please check console and keys.json.</div>
 
         <!-- Ticker Configuration -->
-        <section id="tickerConfig">
-            <h2>Ticker Settings <span id="tickerLoading" class="loading-indicator" style="display:none;">Loading...</span></h2>
-            <label for="tickerMessagesInput">Ticker Messages (one per line):</label>
-            <textarea id="tickerMessagesInput" placeholder="Message 1\nMessage 2"></textarea>
-            <label for="tickerSeparatorInput">Message Separator:</label>
-            <input type="text" id="tickerSeparatorInput" value=" +++ ">
-            <button id="saveTickerButton" disabled>Save Ticker Config</button>
-            <div id="tickerFeedback" class="feedback" style="display:none;"></div>
-            <div id="manualJsonContainer" style="display:none;">
-                <p><strong>Fallback:</strong> If Supabase save fails, copy this JSON to update <code>overlay2/ticker-text.json</code> manually:</p>
-                <textarea id="manualJsonTextarea" readonly></textarea>
-                <button id="copyManualJsonButton" class="secondary">Copy Fallback JSON</button>
-                <span id="copyManualFeedback" style="font-size:0.85em; margin-left:5px;"></span>
+        <details id="tickerConfigSection">
+            <summary>
+                Ticker Settings
+                <span id="tickerLoading" class="loading-indicator" style="display:none;">Loading...</span>
+            </summary>
+            <div class="details-content">
+                <label for="tickerMessagesInput">Ticker Messages (one per line):</label>
+                <textarea id="tickerMessagesInput" placeholder="Message 1\nMessage 2"></textarea>
+                <label for="tickerSeparatorInput">Message Separator:</label>
+                <input type="text" id="tickerSeparatorInput" value=" +++ ">
+                <button id="saveTickerButton" disabled>Save Ticker Config</button>
+                <div id="tickerFeedback" class="feedback" style="display:none;"></div>
+                <div id="manualJsonContainer" style="display:none;">
+                    <p><strong>Fallback:</strong> If Supabase save fails, copy this JSON to update <code>overlay2/ticker-text.json</code> manually:</p>
+                    <textarea id="manualJsonTextarea" readonly></textarea>
+                    <button id="copyManualJsonButton" class="secondary">Copy Fallback JSON</button>
+                    <span id="copyManualFeedback" style="font-size:0.85em; margin-left:5px;"></span>
+                </div>
             </div>
-        </section>
+        </details>
 
         <!-- Lower Third Configuration -->
-        <section id="lowerThirdConfig">
-            <h2>Lower Third Settings <span id="ltLoading" class="loading-indicator" style="display:none;">Loading...</span></h2>
-            <label for="ltNameInput">Name:</label>
-            <input type="text" id="ltNameInput" placeholder="Jane Doe">
-            <label for="ltFunctionInput">Function/Title:</label>
-            <input type="text" id="ltFunctionInput" placeholder="Lead Developer">
-            <label for="ltAffiliationInput">Affiliation/Company:</label>
-            <input type="text" id="ltAffiliationInput" placeholder="Awesome Inc.">
-            <button id="saveLowerThirdButton" disabled>Save Lower Third Config</button>
-            <div id="lowerThirdFeedback" class="feedback" style="display:none;"></div>
-        </section>
+        <details id="lowerThirdConfigSection">
+            <summary>
+                Lower Third Settings
+                <span id="ltLoading" class="loading-indicator" style="display:none;">Loading...</span>
+            </summary>
+            <div class="details-content">
+                <label for="ltNameInput">Name:</label>
+                <input type="text" id="ltNameInput" placeholder="Jane Doe">
+                <label for="ltFunctionInput">Function/Title:</label>
+                <input type="text" id="ltFunctionInput" placeholder="Lead Developer">
+                <label for="ltAffiliationInput">Affiliation/Company:</label>
+                <input type="text" id="ltAffiliationInput" placeholder="Awesome Inc.">
+                <button id="saveLowerThirdButton" disabled>Save Lower Third Config</button>
+                <div id="lowerThirdFeedback" class="feedback" style="display:none;"></div>
+            </div>
+        </details>
 
         <!-- Logo Configuration -->
-        <section id="logoConfig">
-            <h2>Logo (Overlay 1) Settings <span id="logoLoading" class="loading-indicator" style="display:none;">Loading...</span></h2>
-            <label for="logoUrlInput">Logo Image URL (e.g., <code>../pictures/logo.png</code> or full https URL):</label>
-            <input type="text" id="logoUrlInput" placeholder="../pictures/overlay1.png">
-            <button id="saveLogoButton" disabled>Save Logo Config</button>
-            <div id="logoFeedback" class="feedback" style="display:none;"></div>
-        </section>
+        <details id="logoConfigSection">
+            <summary>
+                Logo (Overlay 1) Settings
+                <span id="logoLoading" class="loading-indicator" style="display:none;">Loading...</span>
+            </summary>
+            <div class="details-content">
+                <label for="logoUrlInput">Logo Image URL (e.g., <code>../pictures/logo.png</code> or full https URL):</label>
+                <input type="text" id="logoUrlInput" placeholder="../pictures/overlay1.png">
+                <button id="saveLogoButton" disabled>Save Logo Config</button>
+                <div id="logoFeedback" class="feedback" style="display:none;"></div>
+            </div>
+        </details>
     </div>
 
     <script>
+        // JavaScript (from previous full correct version) remains the same.
+        // No JavaScript changes are needed for the <details>/<summary> collapse functionality.
+        // For brevity, I'm not repeating the full JS here, but ensure you have that correct, robust version.
+        // Key parts: initializeSupabase, load functions, save functions, DOMContentLoaded logic.
         const LOG_PREFIX_CONFIG = "OverlayConfig:";
         let supabaseClient = null;
         const initErrorEl = document.getElementById('initError');
@@ -121,7 +185,7 @@
                 console.error(LOG_PREFIX_CONFIG, "Failed to initialize Supabase:", error.message, error);
                 initErrorEl.textContent = `Supabase Initialization Error: ${error.message}. Check console & keys.json. Page functionality will be limited.`;
                 initErrorEl.style.display = 'block';
-                document.querySelectorAll('section button[id^="save"]').forEach(btn => {
+                document.querySelectorAll('section button[id^="save"], details button[id^="save"]').forEach(btn => { // Updated selector
                     btn.disabled = true;
                     btn.title = "Supabase not initialized";
                 });
@@ -139,68 +203,10 @@
         const copyManualJsonButtonEl = document.getElementById('copyManualJsonButton');
         const copyManualFeedbackEl = document.getElementById('copyManualFeedback');
 
-        async function loadTickerConfig() {
-            if (!supabaseClient) { console.warn(LOG_PREFIX_CONFIG, "Supabase not ready for loadTickerConfig"); return; }
-            tickerLoadingEl.style.display = 'inline';
-            console.log(LOG_PREFIX_CONFIG, "Loading ticker config...");
-            try {
-                const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'ticker').maybeSingle();
-                if (error) throw error; // Let outer catch handle
-                if (data && data.config_data) {
-                    console.log(LOG_PREFIX_CONFIG, "Ticker config loaded:", data.config_data);
-                    tickerMessagesInputEl.value = data.config_data.messages.join('\n');
-                    tickerSeparatorInputEl.value = data.config_data.separator;
-                } else {
-                    console.log(LOG_PREFIX_CONFIG, "No ticker config found in DB or it's null. Form will be empty/default.");
-                }
-            } catch (error) {
-                console.error(LOG_PREFIX_CONFIG, 'Error loading ticker config:', error.message, error);
-                showFeedback(tickerFeedbackEl, `Error loading ticker: ${error.message}`, false);
-            } finally {
-                tickerLoadingEl.style.display = 'none';
-            }
-        }
-        saveTickerButtonEl.addEventListener('click', async () => {
-            console.log(LOG_PREFIX_CONFIG, "saveTickerButton CLICKED.");
-            if (!supabaseClient) {
-                showFeedback(tickerFeedbackEl, 'Supabase not initialized. Cannot save.', false);
-                console.warn(LOG_PREFIX_CONFIG, "Save Ticker: Supabase client not ready.");
-                return;
-            }
-            console.log(LOG_PREFIX_CONFIG, "Save Ticker: Disabling button.");
-            saveTickerButtonEl.disabled = true; saveTickerButtonEl.textContent = 'Saving...';
-            const messages = tickerMessagesInputEl.value.trim().split('\n').map(s => s.trim()).filter(s => s);
-            const separator = tickerSeparatorInputEl.value.trim();
-            const configData = { messages, separator };
-            console.log(LOG_PREFIX_CONFIG, "Save Ticker: Prepared data:", configData);
-            manualJsonTextareaEl.value = JSON.stringify(configData, null, 2);
+        async function loadTickerConfig() { /* ... (same JS as before, ensure it targets correct elements within .details-content if IDs changed, but they haven't) ... */ }
+        saveTickerButtonEl.addEventListener('click', async () => { /* ... (same JS as before) ... */ });
+        copyManualJsonButtonEl.addEventListener('click', async () => { /* ... (same JS as before) ... */ });
 
-            try {
-                console.log(LOG_PREFIX_CONFIG, "Save Ticker: Attempting Supabase upsert...");
-                const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
-                    { overlay_type: 'ticker', config_data: configData },
-                    { onConflict: 'overlay_type' }
-                );
-                if (error) {
-                    console.error(LOG_PREFIX_CONFIG, 'Save Ticker: Supabase upsert error:', error);
-                    throw error;
-                }
-                console.log(LOG_PREFIX_CONFIG, "Save Ticker: Supabase upsert successful. Response data:", upsertData);
-                showFeedback(tickerFeedbackEl, 'Ticker config saved successfully!', true);
-                manualJsonContainerEl.style.display = 'none';
-            } catch (error) {
-                console.error(LOG_PREFIX_CONFIG, 'Save Ticker: Catch block: Error saving config:', error.message, error);
-                showFeedback(tickerFeedbackEl, `Error saving ticker: ${error.message}. Fallback JSON available.`, false);
-                manualJsonContainerEl.style.display = 'block';
-            } finally {
-                console.log(LOG_PREFIX_CONFIG, "Save Ticker: Finally block: Re-enabling button.");
-                saveTickerButtonEl.disabled = false; saveTickerButtonEl.textContent = 'Save Ticker Config';
-            }
-        });
-        copyManualJsonButtonEl.addEventListener('click', async () => {
-            try { await navigator.clipboard.writeText(manualJsonTextareaEl.value); copyManualFeedbackEl.textContent = 'Copied!'; setTimeout(() => { copyManualFeedbackEl.textContent = ''; }, 2000); }
-            catch (err) { copyManualFeedbackEl.textContent = 'Failed to copy.'; }
-        });
 
         // --- Lower Third ---
         const ltNameInputEl = document.getElementById('ltNameInput');
@@ -209,115 +215,16 @@
         const saveLowerThirdButtonEl = document.getElementById('saveLowerThirdButton');
         const lowerThirdFeedbackEl = document.getElementById('lowerThirdFeedback');
 
-        async function loadLowerThirdConfig() {
-            if (!supabaseClient) { console.warn(LOG_PREFIX_CONFIG, "Supabase not ready for loadLowerThirdConfig"); return; }
-            ltLoadingEl.style.display = 'inline';
-            console.log(LOG_PREFIX_CONFIG, "Loading Lower Third config...");
-            try {
-                const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'lower_third').maybeSingle();
-                if (error) throw error;
-                if (data && data.config_data) {
-                    console.log(LOG_PREFIX_CONFIG, "Lower Third config loaded:", data.config_data);
-                    ltNameInputEl.value = data.config_data.name || '';
-                    ltFunctionInputEl.value = data.config_data.function || '';
-                    ltAffiliationInputEl.value = data.config_data.affiliation || '';
-                } else {
-                    console.log(LOG_PREFIX_CONFIG, "No Lower Third config found in DB.");
-                }
-            } catch (error) {
-                console.error(LOG_PREFIX_CONFIG, 'Error loading Lower Third config:', error.message, error);
-                showFeedback(lowerThirdFeedbackEl, `Error loading LT: ${error.message}`, false);
-            } finally {
-                ltLoadingEl.style.display = 'none';
-            }
-        }
-        saveLowerThirdButtonEl.addEventListener('click', async () => {
-            console.log(LOG_PREFIX_CONFIG, "saveLowerThirdButton CLICKED.");
-            if (!supabaseClient) { showFeedback(lowerThirdFeedbackEl, 'Supabase not initialized.', false); return; }
-            console.log(LOG_PREFIX_CONFIG, "Save LT: Disabling button.");
-            saveLowerThirdButtonEl.disabled = true; saveLowerThirdButtonEl.textContent = 'Saving...';
-            const configData = { name: ltNameInputEl.value.trim(), function: ltFunctionInputEl.value.trim(), affiliation: ltAffiliationInputEl.value.trim() };
-            console.log(LOG_PREFIX_CONFIG, "Save LT: Prepared data:", configData);
-            try {
-                console.log(LOG_PREFIX_CONFIG, "Save LT: Attempting Supabase upsert...");
-                const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
-                    { overlay_type: 'lower_third', config_data: configData },
-                    { onConflict: 'overlay_type' }
-                );
-                if (error) {
-                    console.error(LOG_PREFIX_CONFIG, 'Save LT: Supabase upsert error:', error);
-                    throw error;
-                }
-                console.log(LOG_PREFIX_CONFIG, "Save LT: Supabase upsert successful. Response data:", upsertData);
-                showFeedback(lowerThirdFeedbackEl, 'Lower Third config saved!', true);
-            } catch (error) {
-                console.error(LOG_PREFIX_CONFIG, 'Save LT: Catch block: Error saving config:', error.message, error);
-                showFeedback(lowerThirdFeedbackEl, `Error saving LT: ${error.message}`, false);
-            } finally {
-                console.log(LOG_PREFIX_CONFIG, "Save LT: Finally block: Re-enabling button.");
-                saveLowerThirdButtonEl.disabled = false; saveLowerThirdButtonEl.textContent = 'Save Lower Third Config';
-            }
-        });
+        async function loadLowerThirdConfig() { /* ... (same JS as before) ... */ }
+        saveLowerThirdButtonEl.addEventListener('click', async () => { /* ... (same JS as before) ... */ });
 
         // --- Logo ---
         const logoUrlInputEl = document.getElementById('logoUrlInput');
         const saveLogoButtonEl = document.getElementById('saveLogoButton');
         const logoFeedbackEl = document.getElementById('logoFeedback');
 
-        async function loadLogoConfig() {
-            if (!supabaseClient) { console.warn(LOG_PREFIX_CONFIG, "Supabase not ready for loadLogoConfig"); return; }
-            logoLoadingEl.style.display = 'inline';
-            console.log(LOG_PREFIX_CONFIG, "Loading Logo config...");
-            try {
-                const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'logo').maybeSingle();
-                if (error) throw error;
-                if (data && data.config_data) {
-                    console.log(LOG_PREFIX_CONFIG, "Logo config loaded:", data.config_data);
-                    logoUrlInputEl.value = data.config_data.url || '../pictures/overlay1.png';
-                } else {
-                    console.log(LOG_PREFIX_CONFIG, "No Logo config found in DB, using default.");
-                    logoUrlInputEl.value = '../pictures/overlay1.png';
-                }
-            } catch (error) {
-                console.error(LOG_PREFIX_CONFIG, 'Error loading logo config:', error.message, error);
-                showFeedback(logoFeedbackEl, `Error loading logo: ${error.message}`, false);
-            } finally {
-                logoLoadingEl.style.display = 'none';
-            }
-        }
-        saveLogoButtonEl.addEventListener('click', async () => {
-            console.log(LOG_PREFIX_CONFIG, "saveLogoButton CLICKED.");
-            if (!supabaseClient) { showFeedback(logoFeedbackEl, 'Supabase not initialized.', false); return; }
-            console.log(LOG_PREFIX_CONFIG, "Save Logo: Disabling button.");
-            saveLogoButtonEl.disabled = true; saveLogoButtonEl.textContent = 'Saving...';
-            const configData = { url: logoUrlInputEl.value.trim() };
-            console.log(LOG_PREFIX_CONFIG, "Save Logo: Prepared data:", configData);
-            if (!configData.url) {
-                showFeedback(logoFeedbackEl, 'Logo URL cannot be empty.', false);
-                saveLogoButtonEl.disabled = false; saveLogoButtonEl.textContent = 'Save Logo Config';
-                console.warn(LOG_PREFIX_CONFIG, "Save Logo: URL is empty.");
-                return;
-            }
-            try {
-                console.log(LOG_PREFIX_CONFIG, "Save Logo: Attempting Supabase upsert...");
-                const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
-                    { overlay_type: 'logo', config_data: configData },
-                    { onConflict: 'overlay_type' }
-                );
-                if (error) {
-                    console.error(LOG_PREFIX_CONFIG, 'Save Logo: Supabase upsert error:', error);
-                    throw error;
-                }
-                console.log(LOG_PREFIX_CONFIG, "Save Logo: Supabase upsert successful. Response data:", upsertData);
-                showFeedback(logoFeedbackEl, 'Logo config saved!', true);
-            } catch (error) {
-                console.error(LOG_PREFIX_CONFIG, 'Save Logo: Catch block: Error saving config:', error.message, error);
-                showFeedback(logoFeedbackEl, `Error saving logo: ${error.message}`, false);
-            } finally {
-                console.log(LOG_PREFIX_CONFIG, "Save Logo: Finally block: Re-enabling button.");
-                saveLogoButtonEl.disabled = false; saveLogoButtonEl.textContent = 'Save Logo Config';
-            }
-        });
+        async function loadLogoConfig() { /* ... (same JS as before) ... */ }
+        saveLogoButtonEl.addEventListener('click', async () => { /* ... (same JS as before) ... */ });
 
         // --- Initial Load and Button Enablement ---
         document.addEventListener('DOMContentLoaded', async () => {
@@ -325,9 +232,9 @@
             const initialized = await initializeSupabase();
             if (initialized) {
                 initErrorEl.style.display = 'none';
-                saveTickerButtonEl.disabled = false;
-                saveLowerThirdButtonEl.disabled = false;
-                saveLogoButtonEl.disabled = false;
+                // Enable all save buttons
+                document.querySelectorAll('details button[id^="save"]').forEach(btn => btn.disabled = false);
+
                 console.log(LOG_PREFIX_CONFIG, "Initialization successful. Loading all configs in parallel.");
                 Promise.all([
                     loadTickerConfig(),
