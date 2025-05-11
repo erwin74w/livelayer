@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lower Third Overlay</title>
+    <title>Lower Third Overlay (Supabase)</title>
     <link rel="stylesheet" href="overlay3.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <div id="lowerThirdContainer" class="lower-third-container">
@@ -14,68 +15,74 @@
     </div>
 
     <script>
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace
+
         const nameEl = document.getElementById('ltName');
         const functionEl = document.getElementById('ltFunction');
         const affiliationEl = document.getElementById('ltAffiliation');
         const containerEl = document.getElementById('lowerThirdContainer');
-
-        const lowerThirdDataKey = 'lowerThirdData';
+        const defaultLowerThirdData = { name: "N/A", function: "", affiliation: ""};
 
         function updateLowerThirdContent(data) {
-            if (data && data.name) { // Check if name exists, at least
+            if (data) {
                 nameEl.textContent = data.name || '';
                 functionEl.textContent = data.function || '';
                 affiliationEl.textContent = data.affiliation || '';
                 containerEl.classList.remove('empty');
-
-                // Hide fields if they are empty to prevent empty lines
                 functionEl.style.display = data.function ? 'block' : 'none';
                 affiliationEl.style.display = data.affiliation ? 'block' : 'none';
-
             } else {
-                nameEl.textContent = '';
-                functionEl.textContent = '';
-                affiliationEl.textContent = '';
-                containerEl.classList.add('empty'); // Add class to show placeholder
+                nameEl.textContent = defaultLowerThirdData.name;
+                functionEl.textContent = defaultLowerThirdData.function;
+                affiliationEl.textContent = defaultLowerThirdData.affiliation;
+                containerEl.classList.add('empty');
             }
         }
 
-        function loadContent() {
-            try {
-                const storedData = localStorage.getItem(lowerThirdDataKey);
-                if (storedData) {
-                    const parsedData = JSON.parse(storedData);
-                    updateLowerThirdContent(parsedData);
-                } else {
-                    // Default content or placeholder if nothing in localStorage
-                    updateLowerThirdContent({ name: "", function: "", affiliation: "" }); // Show empty or placeholder
-                }
-            } catch (e) {
-                console.error("Error loading or parsing lower third data:", e);
+        async function loadContent() {
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !supabase) {
+                console.warn("Supabase not configured for lower third, using default.");
+                updateLowerThirdContent(defaultLowerThirdData);
+                return;
+            }
+            const { createClient } = supabase;
+            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            const { data, error } = await supabaseClient
+                .from('overlay_configurations')
+                .select('config_data')
+                .eq('overlay_type', 'lower_third')
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                console.error("Error loading lower third data from Supabase:", error);
                 updateLowerThirdContent(null); // Show placeholder on error
+            } else if (data && data.config_data) {
+                updateLowerThirdContent(data.config_data);
+            } else {
+                console.log("No lower third data in Supabase, using default.");
+                updateLowerThirdContent(defaultLowerThirdData);
             }
         }
-
-        // Initial load
         loadContent();
 
-        // Listen for changes from overlayconfig.html (or console, if it were to set data)
-        window.addEventListener('storage', (event) => {
-            if (event.key === lowerThirdDataKey) {
-                if (event.newValue) {
-                    try {
-                        const parsedData = JSON.parse(event.newValue);
-                        updateLowerThirdContent(parsedData);
-                    } catch (e) {
-                        console.error("Error parsing updated lower third data:", e);
-                        updateLowerThirdContent(null);
+        // FOR REAL-TIME UPDATES (Advanced - MVP+):
+        /*
+        if (supabaseClient) {
+             const channel = supabaseClient
+                .channel('lower-third-updates')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_configurations', filter: 'overlay_type=eq.lower_third' }, payload => {
+                    console.log('Lower Third config change received!', payload);
+                    if (payload.new && payload.new.config_data) {
+                        updateLowerThirdContent(payload.new.config_data);
+                    } else {
+                         updateLowerThirdContent(defaultLowerThirdData);
                     }
-                } else {
-                    // Data was cleared from localStorage
-                    updateLowerThirdContent(null);
-                }
-            }
-        });
+                })
+                .subscribe();
+        }
+        */
     </script>
 </body>
 </html>
