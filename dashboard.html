@@ -1,14 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overlay Dashboard & Control</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* ... (CSS remains the same as the previous correct version) ... */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f6f8fa; color: #24292e; padding: 20px; }
+        .container { background: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 1px 10px rgba(0,0,0,0.08); max-width: 700px; margin: 20px auto; }
+        details { border: 1px solid #e1e4e8; border-radius: 6px; margin-bottom: 20px; background-color: #fff; }
+        details:last-of-type { margin-bottom: 0; }
+        summary {
+            font-size: 1.2em; font-weight: 600; color: #24292e; padding: 12px 20px; cursor: pointer;
+            list-style: none; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #eaecef;
+        }
+        details[open] summary { border-bottom: 1px solid #eaecef; }
+        summary::-webkit-details-marker { display: none; }
+        .summary-controls { display: flex; align-items: center; gap: 15px; flex-grow: 1; }
+        .summary-title-area { flex-grow: 1; }
+        summary::after { content: '▼'; font-size: 0.7em; transition: transform 0.2s ease-in-out; }
+        details[open] summary::after { transform: rotate(-180deg); }
+        .details-content { padding: 15px 20px 20px 20px; border-top: none; }
+        h1 { font-size: 1.8em; border-bottom: 1px solid #eaecef; padding-bottom: 0.5em; margin-bottom: 0.8em;}
+        label { display: block; margin-top: 12px; margin-bottom: 6px; font-weight: 600; font-size: 0.9em; }
+        input[type="text"], textarea {
+            width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #d1d5da;
+            border-radius: 6px; font-size: 1em; box-sizing: border-box; background-color: #fff;
+        }
+        textarea { min-height: 80px; font-family: monospace; }
+        .config-save-button {
+            background-color: #2ea44f; color: white; padding: 8px 14px;
+            border: 1px solid rgba(27,31,35,0.15); border-radius: 6px; cursor: pointer;
+            font-size: 0.9em; font-weight: 500; transition: background-color 0.15s ease-in-out;
+            margin-top: 10px;
+        }
+        .config-save-button:hover { background-color: #2c974b; }
+        .config-save-button:disabled { background-color: #94d3a2; cursor: not-allowed; border-color: #94d3a2; }
+        .toggle-visibility-button {
+            padding: 6px 12px; font-size: 0.85em; border: 1px solid transparent;
+            border-radius: 6px; color: white; cursor: pointer; min-width: 110px;
+            text-align: center; font-weight: 500;
+        }
+        .button-show-state { background-color: #dc3545; border-color: #dc3545; }
+        .button-show-state:hover { background-color: #c82333; }
+        .button-hide-state { background-color: #28a745; border-color: #28a745;}
+        .button-hide-state:hover { background-color: #218838; }
+        .feedback { margin-top: 10px; padding: 10px 12px; border-radius: 6px; font-size: 0.9em; line-height: 1.4; }
+        .success { background-color: #e6ffed; color: #1f883d; border: 1px solid #7ee29a; }
+        .error { background-color: #ffeef0; color: #cb2431; border: 1px solid #ffdce0; }
+        #manualJsonContainer { margin-top: 15px; background-color: #f6f8fa; padding: 15px; border: 1px solid #e1e4e8; border-radius: 6px;}
+        #manualJsonTextarea { min-height: 100px; background-color: #fff; border-color: #d1d5da; }
+        #initError { color: #cb2431; font-weight: 600; padding: 12px 15px; background-color: #ffeef0; border: 1px solid #ffdce0; border-radius: 6px; margin-bottom: 20px; text-align: center;}
+        .loading-indicator { font-style: italic; color: #586069; margin-left: 5px; font-size: 0.8em; font-weight: normal; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Overlay Dashboard</h1>
+        <div id="initError" style="display:none;">Supabase Initialization Error. Check console & keys.json.</div>
+        <p>Manage overlay configurations and toggle their visibility for your stream.</p>
+
+        <!-- Logo (Overlay 1) -->
+        <details id="logoConfigSection">
+            <summary>
+                <div class="summary-controls">
+                    <div class="summary-title-area">
+                        Logo (Overlay 1)
+                        <span id="logoLoading" class="loading-indicator" style="display:none;">Loading...</span>
+                    </div>
+                    <button id="toggleLogoVisibilityButton" class="toggle-visibility-button">Show Logo</button>
+                </div>
+            </summary>
+            <div class="details-content">
+                <label for="logoUrlInput">Logo Image URL:</label>
+                <input type="text" id="logoUrlInput" placeholder="../pictures/overlay1.png">
+                <button id="saveLogoButton" class="config-save-button" disabled>Save Logo Config</button>
+                <div id="logoFeedback" class="feedback" style="display:none;"></div>
+            </div>
+        </details>
+
+        <!-- Ticker (Overlay 2) -->
+        <details id="tickerConfigSection">
+            <summary>
+                <div class="summary-controls">
+                     <div class="summary-title-area">
+                        Ticker (Overlay 2)
+                        <span id="tickerLoading" class="loading-indicator" style="display:none;">Loading...</span>
+                    </div>
+                    <button id="toggleTickerVisibilityButton" class="toggle-visibility-button">Show Ticker</button>
+                </div>
+            </summary>
+            <div class="details-content">
+                <label for="tickerMessagesInput">Ticker Messages (one per line):</label>
+                <textarea id="tickerMessagesInput" placeholder="Message 1\nMessage 2"></textarea>
+                <label for="tickerSeparatorInput">Message Separator:</label>
+                <input type="text" id="tickerSeparatorInput" value=" +++ ">
+                <button id="saveTickerButton" class="config-save-button" disabled>Save Ticker Config</button>
+                <div id="tickerFeedback" class="feedback" style="display:none;"></div>
+                <div id="manualJsonContainer" style="display:none;">
+                     <p><strong>Fallback:</strong> If Supabase save fails, copy this JSON:</p>
+                    <textarea id="manualJsonTextarea" readonly></textarea>
+                    <button id="copyManualJsonButton" class="config-save-button secondary">Copy Fallback JSON</button>
+                    <span id="copyManualFeedback" style="font-size:0.85em; margin-left:5px;"></span>
+                </div>
+            </div>
+        </details>
+
+        <!-- Lower Third (Overlay 3) -->
+        <details id="lowerThirdConfigSection">
+            <summary>
+                <div class="summary-controls">
+                    <div class="summary-title-area">
+                        Lower Third (Overlay 3)
+                        <span id="ltLoading" class="loading-indicator" style="display:none;">Loading...</span>
+                    </div>
+                    <button id="toggleLtVisibilityButton" class="toggle-visibility-button">Show Lower Third</button>
+                </div>
+            </summary>
+            <div class="details-content">
+                <label for="ltNameInput">Name:</label>
+                <input type="text" id="ltNameInput" placeholder="Jane Doe">
+                <label for="ltFunctionInput">Function/Title:</label>
+                <input type="text" id="ltFunctionInput" placeholder="Lead Developer">
+                <label for="ltAffiliationInput">Affiliation/Company:</label>
+                <input type="text" id="ltAffiliationInput" placeholder="Awesome Inc.">
+                <button id="saveLowerThirdButton" class="config-save-button" disabled>Save Lower Third Config</button>
+                <div id="lowerThirdFeedback" class="feedback" style="display:none;"></div>
+            </div>
+        </details>
+    </div>
+
+    <script>
         const LOG_PREFIX_DASH = "Dashboard:";
         let supabaseClient = null;
         const initErrorEl = document.getElementById('initError');
 
-        // UI Elements for loading indicators (these are fine as global if only used once)
+        // UI Elements for loading indicators (these are fine to be global as they are unique)
         const tickerLoadingEl = document.getElementById('tickerLoading');
         const ltLoadingEl = document.getElementById('ltLoading');
         const logoLoadingEl = document.getElementById('logoLoading');
 
         // --- Generic Feedback Function ---
-        function showFeedback(element, message, isSuccess) {
+        function showFeedback(element, message, isSuccess) { /* ... (same) ... */
             element.textContent = message;
             element.className = 'feedback ' + (isSuccess ? 'success' : 'error');
             element.style.display = 'block';
@@ -16,7 +151,7 @@
         }
 
         // --- Supabase Initialization ---
-        async function initializeSupabase() {
+        async function initializeSupabase() { /* ... (same, with console logs) ... */
             console.log(LOG_PREFIX_DASH, "Attempting to initialize Supabase...");
             try {
                 const response = await fetch('keys.json');
@@ -42,41 +177,45 @@
             }
         }
 
-        // --- Config Data Objects (Corrected Access to formElements) ---
+        // --- Config Data Objects (Referencing elements correctly) ---
         const overlayControls = [
             {
                 id: 'logo',
-                loadingEl: logoLoadingEl,
+                configSectionEl: document.getElementById('logoConfigSection'),
+                loadingEl: logoLoadingEl, // Global ref is fine
                 saveButtonEl: document.getElementById('saveLogoButton'),
                 feedbackEl: document.getElementById('logoFeedback'),
-                // Define form elements directly here for simpler access in functions
-                logoUrlInputEl: document.getElementById('logoUrlInput'),
+                formElements: { // These elements are fetched once and stored here
+                    url: document.getElementById('logoUrlInput')
+                },
                 visibilityToggleButtonEl: document.getElementById('toggleLogoVisibilityButton'),
                 visibilityStorageKey: 'overlay1Visibility',
                 textShow: 'Show Logo',
                 textHide: 'Hide Logo',
                 isVisible: false,
-                loadConfigFn: async function() { // Use 'function' to bind 'this' if needed, or pass 'this'
+                loadConfigFn: async function() { // 'this' will refer to this control object
                     const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'logo').maybeSingle();
                     if (error) throw error;
                     if (data && data.config_data) {
-                        this.logoUrlInputEl.value = data.config_data.url || '../pictures/overlay1.png';
-                    } else { this.logoUrlInputEl.value = '../pictures/overlay1.png';}
+                        this.formElements.url.value = data.config_data.url || '../pictures/overlay1.png';
+                    } else { this.formElements.url.value = '../pictures/overlay1.png';}
                 },
                 saveConfigFn: async function() {
-                    const configData = { url: this.logoUrlInputEl.value.trim() };
+                    const configData = { url: this.formElements.url.value.trim() };
                     if (!configData.url) { throw new Error("Logo URL cannot be empty."); }
                     return configData;
                 }
             },
             {
                 id: 'ticker',
-                loadingEl: tickerLoadingEl,
+                configSectionEl: document.getElementById('tickerConfigSection'),
+                loadingEl: tickerLoadingEl, // Global ref
                 saveButtonEl: document.getElementById('saveTickerButton'),
                 feedbackEl: document.getElementById('tickerFeedback'),
-                // Define form elements directly
-                tickerMessagesInputEl: document.getElementById('tickerMessagesInput'),
-                tickerSeparatorInputEl: document.getElementById('tickerSeparatorInput'),
+                formElements: {
+                    messages: document.getElementById('tickerMessagesInput'),
+                    separator: document.getElementById('tickerSeparatorInput')
+                },
                 manualJsonContainerEl: document.getElementById('manualJsonContainer'),
                 manualJsonTextareaEl: document.getElementById('manualJsonTextarea'),
                 visibilityToggleButtonEl: document.getElementById('toggleTickerVisibilityButton'),
@@ -88,27 +227,32 @@
                     const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'ticker').maybeSingle();
                     if (error) throw error;
                     if (data && data.config_data) {
-                        this.tickerMessagesInputEl.value = data.config_data.messages.join('\n');
-                        this.tickerSeparatorInputEl.value = data.config_data.separator;
+                        this.formElements.messages.value = data.config_data.messages.join('\n');
+                        this.formElements.separator.value = data.config_data.separator;
                     }
                 },
                 saveConfigFn: async function() {
-                    const messages = this.tickerMessagesInputEl.value.trim().split('\n').map(s => s.trim()).filter(s => s);
-                    const separator = this.tickerSeparatorInputEl.value.trim();
+                    const messages = this.formElements.messages.value.trim().split('\n').map(s => s.trim()).filter(s => s);
+                    const separator = this.formElements.separator.value.trim();
                     const configData = { messages, separator };
-                    this.manualJsonTextareaEl.value = JSON.stringify(configData, null, 2);
+                    // Update the textarea for manual fallback within this specific control object
+                    if (this.manualJsonTextareaEl) {
+                        this.manualJsonTextareaEl.value = JSON.stringify(configData, null, 2);
+                    }
                     return configData;
                 }
             },
             {
                 id: 'lower_third',
-                loadingEl: ltLoadingEl,
+                configSectionEl: document.getElementById('lowerThirdConfigSection'),
+                loadingEl: ltLoadingEl, // Global ref
                 saveButtonEl: document.getElementById('saveLowerThirdButton'),
                 feedbackEl: document.getElementById('lowerThirdFeedback'),
-                // Define form elements directly
-                ltNameInputEl: document.getElementById('ltNameInput'),
-                ltFunctionInputEl: document.getElementById('ltFunctionInput'),
-                ltAffiliationInputEl: document.getElementById('ltAffiliationInput'),
+                formElements: {
+                    name: document.getElementById('ltNameInput'),
+                    function: document.getElementById('ltFunctionInput'),
+                    affiliation: document.getElementById('ltAffiliationInput')
+                },
                 visibilityToggleButtonEl: document.getElementById('toggleLtVisibilityButton'),
                 visibilityStorageKey: 'overlay3Visibility',
                 textShow: 'Show Lower Third',
@@ -118,16 +262,16 @@
                     const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', 'lower_third').maybeSingle();
                     if (error) throw error;
                     if (data && data.config_data) {
-                        this.ltNameInputEl.value = data.config_data.name || '';
-                        this.ltFunctionInputEl.value = data.config_data.function || '';
-                        this.ltAffiliationInputEl.value = data.config_data.affiliation || '';
+                        this.formElements.name.value = data.config_data.name || '';
+                        this.formElements.function.value = data.config_data.function || '';
+                        this.formElements.affiliation.value = data.config_data.affiliation || '';
                     }
                 },
                 saveConfigFn: async function() {
                     return {
-                        name: this.ltNameInputEl.value.trim(),
-                        function: this.ltFunctionInputEl.value.trim(),
-                        affiliation: this.ltAffiliationInputEl.value.trim()
+                        name: this.formElements.name.value.trim(),
+                        function: this.formElements.function.value.trim(),
+                        affiliation: this.formElements.affiliation.value.trim()
                     };
                 }
             }
@@ -141,7 +285,7 @@
                 if (control.loadingEl) control.loadingEl.style.display = 'inline';
                 try {
                     console.log(LOG_PREFIX_DASH, `Loading config for: ${control.id}`);
-                    // Bind the control object as 'this' for its loadConfigFn
+                    // Pass the control object itself so 'this' inside loadConfigFn refers to it
                     await control.loadConfigFn.call(control);
                     console.log(LOG_PREFIX_DASH, `Config loaded for: ${control.id}`);
                 } catch (error) {
@@ -164,7 +308,7 @@
                     control.saveButtonEl.disabled = true;
                     control.saveButtonEl.textContent = 'Saving...';
                     try {
-                        // Bind the control object as 'this' for its saveConfigFn
+                        // Pass the control object itself so 'this' inside saveConfigFn refers to it
                         const configData = await control.saveConfigFn.call(control);
                         console.log(LOG_PREFIX_DASH, `Attempting to save to Supabase for ${control.id}:`, configData);
                         const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
@@ -178,7 +322,7 @@
                     } catch (error) {
                         console.error(LOG_PREFIX_DASH, `Error saving config for ${control.id}:`, error.message, error);
                         if (control.feedbackEl) showFeedback(control.feedbackEl, `Error saving ${control.id}: ${error.message}`, false);
-                        if (control.manualJsonContainerEl) control.manualJsonContainerEl.style.display = 'block';
+                        if (control.manualJsonContainerEl && control.id === 'ticker') control.manualJsonContainerEl.style.display = 'block'; // Only show ticker fallback
                     } finally {
                         control.saveButtonEl.disabled = false;
                         control.saveButtonEl.textContent = `Save ${control.id.replace('_', ' ')} Config`;
@@ -199,13 +343,54 @@
             });
         }
 
-
-        // --- Visibility Toggle Logic ---
-        function updateVisibilityButtonUI(control) { /* ... (same as before) ... */ }
-        function setOverlayVisibilityInStorage(storageKey, visible) { /* ... (same as before) ... */ }
-        function initializeVisibilityToggles() { /* ... (same as before) ... */ }
-        window.addEventListener('storage', (event) => { /* ... (same as before) ... */ });
-
+        // --- Visibility Toggle Logic (from console.html, adapted) ---
+        function updateVisibilityButtonUI(control) { /* ... (same) ... */
+            if (control.isVisible) {
+                control.visibilityToggleButtonEl.textContent = control.textHide;
+                control.visibilityToggleButtonEl.classList.remove('button-show-state');
+                control.visibilityToggleButtonEl.classList.add('button-hide-state');
+            } else {
+                control.visibilityToggleButtonEl.textContent = control.textShow;
+                control.visibilityToggleButtonEl.classList.remove('button-hide-state');
+                control.visibilityToggleButtonEl.classList.add('button-show-state');
+            }
+        }
+        function setOverlayVisibilityInStorage(storageKey, visible) { /* ... (same) ... */
+            localStorage.setItem(storageKey, visible ? 'show' : 'hide');
+            localStorage.setItem(storageKey + 'Timestamp', Date.now());
+            console.log(LOG_PREFIX_DASH, `Set ${storageKey} to ${visible ? 'show' : 'hide'} in localStorage.`);
+        }
+        function initializeVisibilityToggles() { /* ... (same) ... */
+            console.log(LOG_PREFIX_DASH, "Initializing visibility toggles...");
+            overlayControls.forEach(control => {
+                if (control.visibilityToggleButtonEl) {
+                    const persistedState = localStorage.getItem(control.visibilityStorageKey);
+                    if (persistedState === 'show') {
+                        control.isVisible = true;
+                    } else {
+                        control.isVisible = false;
+                        if (persistedState !== 'hide') {
+                           setOverlayVisibilityInStorage(control.visibilityStorageKey, false);
+                        }
+                    }
+                    updateVisibilityButtonUI(control);
+                    control.visibilityToggleButtonEl.addEventListener('click', () => {
+                        control.isVisible = !control.isVisible;
+                        updateVisibilityButtonUI(control);
+                        setOverlayVisibilityInStorage(control.visibilityStorageKey, control.isVisible);
+                    });
+                }
+            });
+        }
+        window.addEventListener('storage', (event) => { /* ... (same) ... */
+             overlayControls.forEach(control => {
+                if (event.key === control.visibilityStorageKey && control.visibilityToggleButtonEl) {
+                    console.log(LOG_PREFIX_DASH, `Storage event for ${control.visibilityStorageKey}, new value: ${event.newValue}`);
+                    control.isVisible = (event.newValue === 'show');
+                    updateVisibilityButtonUI(control);
+                }
+            });
+        });
 
         // --- DOMContentLoaded ---
         document.addEventListener('DOMContentLoaded', async () => {
@@ -223,3 +408,5 @@
             }
         });
     </script>
+</body>
+</html>
