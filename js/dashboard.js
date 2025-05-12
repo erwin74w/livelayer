@@ -1,221 +1,123 @@
-// /root/js/configManager.js
-import { supabase } from './supabaseClient.js';
-import { getEl, showConfigFeedback } from './ui.js';
-import { getCurrentUser } from './auth.js';
+// /root/js/dashboard.js
+import { supabase, initializeSupabase as initSupabaseService } from './supabaseClient.js';
+import { getEl } from './ui.js'; // Assuming getEl is general enough
+import { handleSendMagicLink, handleLogout, updateUIForAuthState } from './auth.js';
+import { overlayControls, initializeControlDomElements, loadAllConfigs, setupSaveListeners } from './configManager.js';
+import { initializeVisibilityToggles, setupStorageListener } from './visibilityManager.js';
 
-const LOG_PREFIX_CONFIG_MGR = "ConfigManager:";
+const LOG_PREFIX_DASH_MAIN = "DashboardMain:";
+console.log(LOG_PREFIX_DASH_MAIN, "Script loaded and parsed."); // Earliest log
 
-export const overlayControls = [
-    {
-        type: 'logo',
-        displayName: 'Logo',
-        elements: { // IDs used here MUST match HTML
-            loading: 'loading-logo',
-            saveButton: 'save-logo',
-            feedback: 'feedback-logo',
-            url: 'input-logo-url',
-            toggleButton: 'toggle-logo'
-        },
-        visibility: { storageKey: 'overlay1Visibility', textShow: 'Show Logo', textHide: 'Hide Logo', isVisible: false },
-        load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
-            if (error) throw error;
-            if (data && data.config_data && this.domElements.url) {
-                this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
-            } else if (this.domElements.url) {
-                this.domElements.url.value = '../pictures/overlay1.png';
-            }
-        },
-        save: async function() {
-            if (!this.domElements.url) throw new Error("Logo URL input element not found for save.");
-            const configData = { url: this.domElements.url.value.trim() };
-            if (!configData.url) { throw new Error("Logo URL cannot be empty."); }
-            return configData;
-        }
-    },
-    {
-        type: 'ticker',
-        displayName: 'Ticker',
-        elements: {
-            loading: 'loading-ticker',
-            saveButton: 'save-ticker',
-            feedback: 'feedback-ticker',
-            messages: 'input-ticker-messages',
-            separator: 'input-ticker-separator',
-            manualJsonContainer: 'manualJsonContainer-ticker',
-            manualJsonTextarea: 'manualJsonTextarea-ticker',
-            copyManualJsonButton: 'copyManualJsonButton-ticker',
-            copyManualFeedback: 'copyManualFeedback-ticker',
-            toggleButton: 'toggle-ticker'
-        },
-        visibility: { storageKey: 'overlay2Visibility', textShow: 'Show Ticker', textHide: 'Hide Ticker', isVisible: false },
-        load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
-            if (error) throw error;
-            if (data && data.config_data) {
-                if(this.domElements.messages) this.domElements.messages.value = (data.config_data.messages || []).join('\n');
-                if(this.domElements.separator) this.domElements.separator.value = data.config_data.separator || ' +++ ';
-            } else {
-                if(this.domElements.messages) this.domElements.messages.value = '';
-                if(this.domElements.separator) this.domElements.separator.value = ' +++ ';
-            }
-        },
-        save: async function() {
-            if (!this.domElements.messages || !this.domElements.separator) throw new Error("Ticker form elements not found for save.");
-            const messages = this.domElements.messages.value.trim().split('\n').map(s => s.trim()).filter(s => s);
-            const separator = this.domElements.separator.value.trim();
-            const configData = { messages, separator };
-            if (this.domElements.manualJsonTextarea) {
-                this.domElements.manualJsonTextarea.value = JSON.stringify(configData, null, 2);
-            }
-            return configData;
-        }
-    },
-    {
-        type: 'lower_third',
-        displayName: 'Lower Third',
-        elements: {
-            loading: 'loading-lower_third',
-            saveButton: 'save-lower_third',
-            feedback: 'feedback-lower_third',
-            name: 'input-lower_third-name',
-            function: 'input-lower_third-function',
-            affiliation: 'input-lower_third-affiliation',
-            toggleButton: 'toggle-lower_third'
-        },
-        visibility: { storageKey: 'overlay3Visibility', textShow: 'Show Lower Third', textHide: 'Hide Lower Third', isVisible: false },
-        load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
-            if (error) throw error;
-            if (data && data.config_data) {
-                if(this.domElements.name) this.domElements.name.value = data.config_data.name || '';
-                if(this.domElements.function) this.domElements.function.value = data.config_data.function || '';
-                if(this.domElements.affiliation) this.domElements.affiliation.value = data.config_data.affiliation || '';
-            } else {
-                if(this.domElements.name) this.domElements.name.value = '';
-                if(this.domElements.function) this.domElements.function.value = '';
-                if(this.domElements.affiliation) this.domElements.affiliation.value = '';
-            }
-        },
-        save: async function() {
-            if (!this.domElements.name || !this.domElements.function || !this.domElements.affiliation) {
-                throw new Error("Lower third form elements not found for save.");
-            }
-            return {
-                name: this.domElements.name.value.trim(),
-                function: this.domElements.function.value.trim(),
-                affiliation: this.domElements.affiliation.value.trim()
-            };
-        }
+// --- DOMContentLoaded & Main Execution Flow ---
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log(LOG_PREFIX_DASH_MAIN, "DOMContentLoaded event START.");
+
+    // This must be called first as other modules might query DOM elements via getEl
+    // or expect overlayControls[n].domElements to be populated.
+    console.log(LOG_PREFIX_DASH_MAIN, "Calling initializeControlDomElements...");
+    initializeControlDomElements();
+    console.log(LOG_PREFIX_DASH_MAIN, "initializeControlDomElements complete.");
+
+
+    // Initial UI state
+    const authSectEl = getEl('authSection');
+    const dashContentEl = getEl('dashboardContent');
+    const magicLinkInstrEl = getEl('magicLinkInstructions');
+
+    if(authSectEl) authSectEl.style.display = 'block';
+    if(dashContentEl) dashContentEl.style.display = 'none';
+    if(magicLinkInstrEl) magicLinkInstrEl.textContent = "Checking authentication status...";
+
+
+    // Attach event listeners for global auth buttons
+    console.log(LOG_PREFIX_DASH_MAIN, "Attempting to get sendMagicLinkButton element...");
+    const sendMagicLnkBtn = getEl('sendMagicLinkButton');
+    console.log(LOG_PREFIX_DASH_MAIN, "sendMagicLinkButton element is:", sendMagicLnkBtn); // <<< CRITICAL LOG
+
+    if (sendMagicLnkBtn) {
+        console.log(LOG_PREFIX_DASH_MAIN, "Attaching 'click' event listener to sendMagicLinkButton.");
+        sendMagicLnkBtn.addEventListener('click', handleSendMagicLink);
+        console.log(LOG_PREFIX_DASH_MAIN, "'click' event listener ATTACHED to sendMagicLinkButton."); // <<< CRITICAL LOG
+    } else {
+        console.error(LOG_PREFIX_DASH_MAIN, "CRITICAL ERROR: sendMagicLinkButton (ID: sendMagicLinkButton) NOT FOUND in DOM! Cannot attach listener.");
     }
-];
 
-export function initializeControlDomElements() {
-    console.log(LOG_PREFIX_CONFIG_MGR, "Initializing DOM elements for overlayControls...");
-    overlayControls.forEach(control => {
-        control.domElements = {}; // Create/reset domElements
-        for (const key in control.elements) {
-            const elementId = control.elements[key];
-            control.domElements[key] = getEl(elementId);
-            // More specific checks
-            const isFormInput = ['url', 'messages', 'separator', 'name', 'function', 'affiliation'].includes(key);
-            const isButton = ['saveButton', 'toggleButton', 'copyManualJsonButton'].includes(key);
-            const isFeedback = ['feedback', 'copyManualFeedback'].includes(key);
-            const isOptionalContainer = ['manualJsonContainer', 'manualJsonTextarea', 'loading'].includes(key);
+    const logoutBtn = getEl('logoutButton');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+        console.log(LOG_PREFIX_DASH_MAIN, "Event listener attached to logoutButton.");
+    } else { console.error(LOG_PREFIX_DASH_MAIN, "logoutButton NOT FOUND!"); }
 
-            if (!control.domElements[key]) {
-                if (isFormInput || isButton || isFeedback) { // These are generally expected
-                     console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
-                } else if (!isOptionalContainer) { // General warning for others not explicitly optional
-                     console.warn(LOG_PREFIX_CONFIG_MGR, `DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
-                }
+    const copyUrlBtn = getEl('copyOverlayUrlButton');
+    if (copyUrlBtn) {
+        copyUrlBtn.addEventListener('click', async () => {
+            const pubOverlayUrlInEl = getEl('publicOverlayUrl');
+            const copyUrlFbEl = getEl('copyUrlFeedback');
+            if (!pubOverlayUrlInEl || !pubOverlayUrlInEl.value) {
+                if(copyUrlFbEl) copyUrlFbEl.textContent = 'No URL.'; return;
             }
-        }
-    });
-    console.log(LOG_PREFIX_CONFIG_MGR, "DOM elements for overlayControls initialization attempt complete.");
-}
+            try {
+                await navigator.clipboard.writeText(pubOverlayUrlInEl.value);
+                if(copyUrlFbEl) copyUrlFbEl.textContent = 'Copied!';
+                setTimeout(() => { if(copyUrlFbEl) copyUrlFbEl.textContent = ''; }, 2000);
+            } catch (err) {
+                if(copyUrlFbEl) copyUrlFbEl.textContent = 'Copy failed.';
+                console.error(LOG_PREFIX_DASH_MAIN, "Failed to copy URL:", err);
+            }
+        });
+        console.log(LOG_PREFIX_DASH_MAIN, "Event listener attached to copyOverlayUrlButton.");
+    } else { console.error(LOG_PREFIX_DASH_MAIN, "copyOverlayUrlButton NOT FOUND!");}
 
-// ... (Rest of loadAllConfigs, setupSaveListeners, enableAllDashboardButtons, disableAllDashboardButtons - from previous FULL code)
-// For brevity, I'm not re-pasting those loops here, but they should be identical to the last full version.
-// The key change was ensuring the `elements` ID strings above match your HTML.
-export async function loadAllConfigs() {
-    const user = getCurrentUser();
-    if (!supabase || !user) { console.warn(LOG_PREFIX_CONFIG_MGR, "Cannot load configs, Supabase not ready or no user."); return; }
-    console.log(LOG_PREFIX_CONFIG_MGR, "Loading all configurations for user:", user.id);
 
-    for (const control of overlayControls) {
-        if (control.domElements.loading) control.domElements.loading.style.display = 'inline';
-        try {
-            console.log(LOG_PREFIX_CONFIG_MGR, `Loading config for: ${control.type}`);
-            await control.load();
-            console.log(LOG_PREFIX_CONFIG_MGR, `Config loaded for: ${control.type}`);
-        } catch (error) {
-            console.error(LOG_PREFIX_CONFIG_MGR, `Error loading config for ${control.type}:`, error.message, error);
-            if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Error loading: ${error.message}`, false);
-        } finally {
-            if (control.domElements.loading) control.domElements.loading.style.display = 'none';
+    console.log(LOG_PREFIX_DASH_MAIN, "Calling initSupabaseService...");
+    const initialized = await initSupabaseService();
+    console.log(LOG_PREFIX_DASH_MAIN, "initSupabaseService returned:", initialized);
+    
+    if (initialized && supabase) { // Also check if supabase client is not null
+        const initErrEl = getEl('initError');
+        if(initErrEl) initErrEl.style.display = 'none';
+        if(magicLinkInstrEl) magicLinkInstrEl.textContent = "Enter your email and click \"Send Magic Link\".";
+
+        console.log(LOG_PREFIX_DASH_MAIN, "Setting up save listeners and storage listener...");
+        setupSaveListeners();
+        setupStorageListener();
+        console.log(LOG_PREFIX_DASH_MAIN, "Listeners set up.");
+
+
+        console.log(LOG_PREFIX_DASH_MAIN, "Setting up onAuthStateChange listener...");
+        supabase.auth.onAuthStateChange((event, session) => {
+            console.log(LOG_PREFIX_DASH_MAIN, `Auth state change event: ${event}`, "Session present:", !!session);
+            updateUIForAuthState(session?.user || null);
+        });
+        console.log(LOG_PREFIX_DASH_MAIN, "onAuthStateChange listener set up.");
+
+
+        console.log(LOG_PREFIX_DASH_MAIN, "Checking initial Supabase session...");
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+            console.error(LOG_PREFIX_DASH_MAIN, "Error getting initial session:", sessionError);
+            const authFeedbackElement = getEl('authFeedback');
+            if (authFeedbackElement) {
+                authFeedbackElement.textContent = "Could not check login status. Try refreshing.";
+                authFeedbackElement.className = 'feedback error';
+                authFeedbackElement.style.display = 'block';
+            }
+            updateUIForAuthState(null); // Ensure auth form is shown
+        } else {
+            console.log(LOG_PREFIX_DASH_MAIN, "Initial session result:", session);
+            updateUIForAuthState(session?.user || null); // This will trigger loading configs if user is logged in
         }
+    } else {
+        console.warn(LOG_PREFIX_DASH_MAIN, "Supabase not initialized after DOMContentLoaded. Dashboard cannot function properly.");
+        const authSectElAgain = getEl('authSection');
+        const magicLinkInstrElAgain = getEl('magicLinkInstructions');
+        if(authSectElAgain && magicLinkInstrElAgain) {
+            authSectElAgain.innerHTML = `<p class="error" style="text-align:center;">Critical error: Could not connect to services. Please check configuration or network.</p>`;
+            magicLinkInstrElAgain.style.display = 'none';
+        }
+        // Ensure all config/toggle buttons are disabled if Supabase fails to init
+        document.querySelectorAll('details button').forEach(btn => btn.disabled = true);
     }
-}
-
-export function setupSaveListeners() {
-    console.log(LOG_PREFIX_CONFIG_MGR, "Setting up save listeners...");
-    overlayControls.forEach(control => {
-        if (control.domElements.saveButton) {
-            control.domElements.saveButton.addEventListener('click', async () => {
-                console.log(LOG_PREFIX_CONFIG_MGR, `Save button clicked for: ${control.type}`);
-                const user = getCurrentUser();
-                if (!supabase || !user) {
-                    if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, 'Not logged in or Supabase not ready.', false);
-                    return;
-                }
-                control.domElements.saveButton.disabled = true;
-                control.domElements.saveButton.textContent = 'Saving...';
-                try {
-                    const configData = await control.save();
-                    console.log(LOG_PREFIX_CONFIG_MGR, `Attempting to save for ${control.type} (user: ${user.id}):`, configData);
-                    const { data: upsertData, error } = await supabase.from('overlay_configurations').upsert(
-                        { overlay_type: control.type, config_data: configData, user_id: user.id },
-                        { onConflict: 'user_id, overlay_type' }
-                    );
-                    if (error) throw error;
-                    console.log(LOG_PREFIX_CONFIG_MGR, `Save successful for ${control.type}. Response:`, upsertData);
-                    if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved!`, true);
-                    if (control.domElements.manualJsonContainer) control.domElements.manualJsonContainer.style.display = 'none';
-                } catch (error) {
-                    console.error(LOG_PREFIX_CONFIG_MGR, `Error saving config for ${control.type}:`, error.message, error);
-                    if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Error saving: ${error.message}`, false);
-                    if (control.domElements.manualJsonContainer && control.type === 'ticker') {
-                        control.domElements.manualJsonContainer.style.display = 'block';
-                    }
-                } finally {
-                    control.domElements.saveButton.disabled = false;
-                    control.domElements.saveButton.textContent = `Save ${control.displayName} Config`;
-                }
-            });
-        }
-        if (control.type === 'ticker' && control.domElements.copyManualJsonButton && control.domElements.manualJsonTextarea && control.domElements.copyManualFeedback) {
-             control.domElements.copyManualJsonButton.addEventListener('click', async () => {
-                const tickerTextarea = control.domElements.manualJsonTextarea;
-                const feedbackEl = control.domElements.copyManualFeedback;
-                try {
-                    await navigator.clipboard.writeText(tickerTextarea.value);
-                    feedbackEl.textContent = 'Copied!';
-                    setTimeout(() => { feedbackEl.textContent = ''; }, 2000);
-                } catch (err) {
-                    feedbackEl.textContent = 'Failed to copy.';
-                }
-            });
-        }
-    });
-    console.log(LOG_PREFIX_CONFIG_MGR, "Save listeners set up.");
-}
-
-export function enableAllDashboardButtons() {
-    document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button')
-        .forEach(btn => btn.disabled = false);
-}
-export function disableAllDashboardButtons() {
-     document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button')
-        .forEach(btn => btn.disabled = true);
-}
+    console.log(LOG_PREFIX_DASH_MAIN, "DOMContentLoaded event END.");
+});
+console.log("Dashboard script (main orchestrator): ENDING");
