@@ -15,8 +15,17 @@
     </div>
 
     <script>
-        const LOG_PREFIX = "Overlay3 (LowerThird):";
+        const urlParamsOverlay = new URLSearchParams(window.location.search);
+        const userIdForThisOverlay = urlParamsOverlay.get('user');
+        const LOG_PREFIX = `Overlay3 (LowerThird) for User ${userIdForThisOverlay || 'UNKNOWN'}:`;
         console.log(LOG_PREFIX, "Script started.");
+
+        if (!userIdForThisOverlay) {
+            console.error(LOG_PREFIX, "CRITICAL: Missing 'user' query parameter in URL. Overlay will not function.");
+            const container = document.getElementById('lowerThirdContainer');
+            if(container) container.innerHTML = `<p style="color:red; padding:10px;">Error: User ID missing.</p>`;
+            // Optionally throw new Error("Missing user ID for Lower Third Overlay");
+        }
 
         const nameEl = document.getElementById('ltName');
         const functionEl = document.getElementById('ltFunction');
@@ -29,7 +38,7 @@
         async function initializeSupabase() {
             console.log(LOG_PREFIX, "Attempting to initialize Supabase...");
             try {
-                const response = await fetch('../keys.json');
+                const response = await fetch('../keys.json'); // Path relative to overlay3.html
                 console.log(LOG_PREFIX, "Fetched keys.json, status:", response.status);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status} fetching keys.json`);
                 const keys = await response.json();
@@ -37,7 +46,7 @@
                     throw new Error("Supabase URL or Anon Key is missing/not configured in keys.json.");
                 }
                 const { createClient } = supabase;
-                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey); // Use ANON key
                 console.log(LOG_PREFIX, "Supabase client initialized successfully.");
                 return true;
             } catch (error) {
@@ -50,16 +59,16 @@
             const displayData = data || defaultLowerThirdData;
             console.log(LOG_PREFIX, "Updating Lower Third content with data:", displayData);
 
-            if (containerEl.style.animationName) {
+            if (containerEl.style.animationName) { // Attempt to reset entry animation
                 containerEl.style.animation = 'none';
-                containerEl.offsetHeight;
+                containerEl.offsetHeight; // Trigger reflow
             }
 
             nameEl.textContent = displayData.name || '';
             functionEl.textContent = displayData.function || '';
             affiliationEl.textContent = displayData.affiliation || '';
 
-            if (data && data.name) {
+            if (data && data.name) { // If actual data was passed (not just default fallback)
                 containerEl.classList.remove('empty');
                 functionEl.style.display = displayData.function ? 'block' : 'none';
                 affiliationEl.style.display = displayData.affiliation ? 'block' : 'none';
@@ -68,28 +77,34 @@
                 functionEl.style.display = defaultLowerThirdData.function ? 'block' : 'none';
                 affiliationEl.style.display = defaultLowerThirdData.affiliation ? 'block' : 'none';
             }
-            containerEl.style.animation = ''; // Re-apply CSS animation
+            containerEl.style.animation = ''; // Re-apply CSS animation for entry
             console.log(LOG_PREFIX, "Lower Third display updated and animation reset.");
         }
 
-
         async function loadAndListenForLowerThirdChanges() {
             console.log(LOG_PREFIX, "loadAndListenForLowerThirdChanges called.");
+             if (!userIdForThisOverlay) {
+                 console.warn(LOG_PREFIX, "Cannot load/listen, userIdForThisOverlay is missing.");
+                 updateLowerThirdContent(null); // Use default
+                 return;
+            }
+
             if (!supabaseClient) {
                 const initialized = await initializeSupabase();
                 if (!initialized) {
                     console.warn(LOG_PREFIX, "Supabase init failed during load/listen, using default LT data.");
-                    updateLowerThirdContent(null);
+                    updateLowerThirdContent(null); // Use default
                     return;
                 }
             }
 
-            console.log(LOG_PREFIX, "Attempting initial data load...");
+            console.log(LOG_PREFIX, "Attempting initial data load for user:", userIdForThisOverlay);
             try {
                 const { data, error } = await supabaseClient
                     .from('overlay_configurations')
                     .select('config_data')
                     .eq('overlay_type', 'lower_third')
+                    .eq('user_id', userIdForThisOverlay) // Filter by user_id
                     .maybeSingle();
 
                 if (error) {
@@ -99,7 +114,7 @@
                     console.log(LOG_PREFIX, "Initial config loaded from DB:", data.config_data);
                     updateLowerThirdContent(data.config_data);
                 } else {
-                    console.log(LOG_PREFIX, "No initial config in DB or data malformed, using default.");
+                    console.log(LOG_PREFIX, "No initial config in DB or data malformed for this user, using default.");
                     updateLowerThirdContent(null);
                 }
             } catch (fetchError) {
@@ -113,12 +128,16 @@
                 lowerThirdChannel = null;
             }
 
-            console.log(LOG_PREFIX, "Attempting to subscribe to Realtime changes for 'lower_third'...");
+            const channelName = `lt-config-changes-user-${userIdForThisOverlay}`;
+            console.log(LOG_PREFIX, `Attempting to subscribe to Realtime channel '${channelName}' for 'lower_third' and user ${userIdForThisOverlay}...`);
             lowerThirdChannel = supabaseClient
-                .channel('lt-config-changes')
+                .channel(channelName)
                 .on(
                     'postgres_changes',
-                    { event: '*', schema: 'public', table: 'overlay_configurations', filter: 'overlay_type=eq.lower_third' },
+                    {
+                        event: '*', schema: 'public', table: 'overlay_configurations',
+                        filter: `overlay_type=eq.lower_third&user_id=eq.${userIdForThisOverlay}` // Filter Realtime by user_id and type
+                    },
                     (payload) => {
                         console.log(LOG_PREFIX, 'Realtime: Lower Third config change received! Payload:', payload);
                         if (payload.eventType === 'DELETE' || !payload.new || !payload.new.config_data) {
@@ -134,14 +153,16 @@
                     }
                 )
                 .subscribe((status, err) => {
-                    console.log(LOG_PREFIX, `Realtime: Subscription status: ${status}`);
+                    console.log(LOG_PREFIX, `Realtime: Subscription status for ${channelName}: ${status}`);
                     if (status === 'SUBSCRIBED') console.log(LOG_PREFIX, 'Realtime: Subscribed to LT changes!');
                     if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error(LOG_PREFIX, `Realtime: Subscription error: ${status}`, err);
                     if (status === 'CLOSED') console.log(LOG_PREFIX, 'Realtime: Subscription closed.');
                 });
         }
 
-        loadAndListenForLowerThirdChanges();
+        if (userIdForThisOverlay) {
+            loadAndListenForLowerThirdChanges();
+        }
 
         window.addEventListener('beforeunload', async () => {
             console.log(LOG_PREFIX, "beforeunload event.");
