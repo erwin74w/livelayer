@@ -1,38 +1,53 @@
 // /root/js/supabaseClient.js
-import { createClient as supabaseCreateClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"; // Import ESM version
+
+// Import the ESM version directly from the CDN path for Supabase v2
+import { createClient as supabaseCreateClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 const LOG_PREFIX_SUPABASE = "SupabaseClient:";
-let supabase = null;
+let supabaseInstance = null; // Renamed to avoid conflict with global 'supabase' if CDN also loaded in HTML
 
 export async function initializeSupabase() {
-    if (supabase) {
+    if (supabaseInstance) {
         console.log(LOG_PREFIX_SUPABASE, "Client already initialized.");
-        return supabase;
+        return supabaseInstance;
     }
     console.log(LOG_PREFIX_SUPABASE, "Attempting to initialize...");
     try {
-        const response = await fetch('../keys.json'); // Assuming keys.json is in parent of js/
+        // Assuming keys.json is in the parent directory of js/ (i.e., /root/keys.json)
+        // The fetch path is relative to the HTML file that imports dashboard.js
+        const response = await fetch('keys.json');
         console.log(LOG_PREFIX_SUPABASE, "'keys.json' fetch status:", response.status);
-        if (!response.ok) throw new Error(`HTTP ${response.status} fetching keys.json`);
+        if (!response.ok) {
+            let errorText = "Could not retrieve response text.";
+            try { errorText = await response.text(); } catch(e) { /* ignore */ }
+            throw new Error(`HTTP ${response.status} fetching keys.json. Body: ${errorText}`);
+        }
         const keys = await response.json();
+        console.log(LOG_PREFIX_SUPABASE, "Parsed 'keys.json'. URL found:", !!keys.supabaseUrl, "Key found:", !!keys.supabaseAnonKey);
+
         if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
             throw new Error("Supabase URL/Key missing or placeholder in keys.json.");
         }
-        supabase = supabaseCreateClient(keys.supabaseUrl, keys.supabaseAnonKey);
+        
+        supabaseInstance = supabaseCreateClient(keys.supabaseUrl, keys.supabaseAnonKey);
+        
+        if (!supabaseInstance) {
+             throw new Error("Failed to create Supabase client instance.");
+        }
         console.log(LOG_PREFIX_SUPABASE, "Client initialized successfully.");
-        return supabase;
+        return supabaseInstance;
+
     } catch (error) {
         console.error(LOG_PREFIX_SUPABASE, "Failed to initialize:", error.message, error);
-        // Optionally, update some global error display element here if needed from dashboard.html
-        const initErrorEl = document.getElementById('initError'); // Be cautious with direct DOM manipulation from modules
+        const initErrorEl = document.getElementById('initError'); // dashboard.html specific ID
         if(initErrorEl) {
             initErrorEl.textContent = `Supabase Initialization Error: ${error.message}.`;
             initErrorEl.style.display = 'block';
         }
-        throw error; // Re-throw so caller knows it failed
+        throw error; // Re-throw so the main dashboard.js knows it failed
     }
 }
 
-// Export the client instance directly. Other modules will import this.
+// Export the initialized client instance. Other modules will import this.
 // This pattern ensures supabase is initialized only once.
-export { supabase };
+export { supabaseInstance as supabase };
