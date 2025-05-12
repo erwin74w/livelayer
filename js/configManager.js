@@ -123,7 +123,7 @@ export function initializeControlDomElements() {
         control.domElements = {};
         for (const key in control.elements) {
             const elementId = control.elements[key];
-            control.domElements[key] = getEl(elementId);
+            control.domElements[key] = getEl(elementId); // getEl is imported from ui.js
 
             const isInput = ['url', 'messages', 'separator', 'name', 'function', 'affiliation'].includes(key);
             const isButton = ['saveButton', 'toggleButton', 'copyManualJsonButton'].includes(key);
@@ -132,7 +132,7 @@ export function initializeControlDomElements() {
 
             if (!control.domElements[key] && !isOptionalContainer) {
                  console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
-            } else if (!control.domElements[key] && isOptionalContainer && key === 'loading') { // Loading is optional but good to have
+            } else if (!control.domElements[key] && isOptionalContainer && key === 'loading') {
                  console.warn(LOG_PREFIX_CONFIG_MGR, `Optional DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
             }
         }
@@ -141,7 +141,7 @@ export function initializeControlDomElements() {
 }
 
 export async function loadAllConfigs() {
-    const user = getCurrentUser();
+    const user = getCurrentUser(); // From auth.js
     if (!supabase || !user) { console.warn(LOG_PREFIX_CONFIG_MGR, "Cannot load configs, Supabase not ready or no user."); return; }
     console.log(LOG_PREFIX_CONFIG_MGR, "Loading all configurations for user:", user.id);
 
@@ -179,16 +179,19 @@ export function setupSaveListeners() {
                     const { data: upsertData, error } = await supabase.from('overlay_configurations').upsert(
                         { overlay_type: control.type, config_data: configData, user_id: user.id },
                         {
-                            onConflict: 'overlay_configurations_user_id_overlay_type_key', // *** CORRECTED onConflict ***
-                            // ignoreDuplicates: false // Default is false, ensures update part of upsert
+                            onConflict: 'user_id, overlay_type', // *** USE COLUMN NAMES for supabase-js ***
+                            // ignoreDuplicates: false // Default is false, which means "update on conflict"
                         }
                     );
-                    if (error) throw error;
+                    if (error) {
+                        console.error(LOG_PREFIX_CONFIG_MGR, `Supabase upsert error for ${control.type}:`, JSON.stringify(error, null, 2));
+                        throw error;
+                    }
                     console.log(LOG_PREFIX_CONFIG_MGR, `Save successful for ${control.type}. Response:`, upsertData);
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved!`, true);
                     if (control.domElements.manualJsonContainer) control.domElements.manualJsonContainer.style.display = 'none';
                 } catch (error) {
-                    console.error(LOG_PREFIX_CONFIG_MGR, `Error saving config for ${control.type}:`, error.message, error); // Log the full error
+                    console.error(LOG_PREFIX_CONFIG_MGR, `Catch block: Error saving config for ${control.type}:`, error.message, error);
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Error saving: ${error.message}`, false);
                     if (control.domElements.manualJsonContainer && control.type === 'ticker') {
                         control.domElements.manualJsonContainer.style.display = 'block';
