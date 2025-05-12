@@ -11,23 +11,13 @@ export const overlayControls = [
         displayName: 'Logo',
         elements: {
             loading: 'loading-logo', saveButton: 'save-logo', feedback: 'feedback-logo',
-            url: 'input-logo-url', toggleButton: 'toggle-logo'
+            url: 'input-logo-url', toggleButton: 'toggle-logo',
+            updateButton: 'update-logo-button' // <<< NEW: ID for the update button
         },
         visibility: { storageKey: 'overlay1Visibility', textShow: 'Show Logo', textHide: 'Hide Logo', isVisible: false },
-        load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
-            if (error) throw error;
-            if (this.domElements.url) {
-                if (data && data.config_data) this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
-                else this.domElements.url.value = '../pictures/overlay1.png';
-            }
-        },
-        save: async function() {
-            if (!this.domElements.url) throw new Error("Logo URL input not found.");
-            const configData = { url: this.domElements.url.value.trim() };
-            if (!configData.url) throw new Error("Logo URL cannot be empty.");
-            return configData;
-        }
+        localStorageRefreshKey: 'refreshOverlayLogo', // <<< NEW: Key for localStorage command
+        load: async function() { /* ... (same as your last complete version) ... */ },
+        save: async function() { /* ... (same as your last complete version) ... */ }
     },
     {
         type: 'ticker',
@@ -37,30 +27,13 @@ export const overlayControls = [
             messages: 'input-ticker-messages', separator: 'input-ticker-separator',
             manualJsonContainer: 'manualJsonContainer-ticker', manualJsonTextarea: 'manualJsonTextarea-ticker',
             copyManualJsonButton: 'copyManualJsonButton-ticker', copyManualFeedback: 'copyManualFeedback-ticker',
-            toggleButton: 'toggle-ticker'
+            toggleButton: 'toggle-ticker',
+            updateButton: 'update-ticker-button' // <<< NEW
         },
         visibility: { storageKey: 'overlay2Visibility', textShow: 'Show Ticker', textHide: 'Hide Ticker', isVisible: false },
-        load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
-            if (error) throw error;
-            if (this.domElements.messages && this.domElements.separator) {
-                if (data && data.config_data) {
-                    this.domElements.messages.value = (data.config_data.messages || []).join('\n');
-                    this.domElements.separator.value = data.config_data.separator || ' +++ ';
-                } else {
-                    this.domElements.messages.value = '';
-                    this.domElements.separator.value = ' +++ ';
-                }
-            }
-        },
-        save: async function() {
-            if (!this.domElements.messages || !this.domElements.separator) throw new Error("Ticker form elements not found.");
-            const messages = this.domElements.messages.value.trim().split('\n').map(s => s.trim()).filter(s => s);
-            const separator = this.domElements.separator.value.trim();
-            const configData = { messages, separator };
-            if (this.domElements.manualJsonTextarea) this.domElements.manualJsonTextarea.value = JSON.stringify(configData, null, 2);
-            return configData;
-        }
+        localStorageRefreshKey: 'refreshOverlayTicker', // <<< NEW
+        load: async function() { /* ... (same) ... */ },
+        save: async function() { /* ... (same) ... */ }
     },
     {
         type: 'lower_third',
@@ -68,45 +41,30 @@ export const overlayControls = [
         elements: {
             loading: 'loading-lower_third', saveButton: 'save-lower_third', feedback: 'feedback-lower_third',
             name: 'input-lower_third-name', function: 'input-lower_third-function',
-            affiliation: 'input-lower_third-affiliation', toggleButton: 'toggle-lower_third'
+            affiliation: 'input-lower_third-affiliation', toggleButton: 'toggle-lower_third',
+            updateButton: 'update-lower_third-button' // <<< NEW
         },
         visibility: { storageKey: 'overlay3Visibility', textShow: 'Show Lower Third', textHide: 'Hide Lower Third', isVisible: false },
-        load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
-            if (error) throw error;
-            if (this.domElements.name && this.domElements.function && this.domElements.affiliation) {
-                if (data && data.config_data) {
-                    this.domElements.name.value = data.config_data.name || '';
-                    this.domElements.function.value = data.config_data.function || '';
-                    this.domElements.affiliation.value = data.config_data.affiliation || '';
-                } else {
-                    this.domElements.name.value = '';
-                    this.domElements.function.value = '';
-                    this.domElements.affiliation.value = '';
-                }
-            }
-        },
-        save: async function() {
-            if (!this.domElements.name || !this.domElements.function || !this.domElements.affiliation) throw new Error("LT form elements not found.");
-            return {
-                name: this.domElements.name.value.trim(),
-                function: this.domElements.function.value.trim(),
-                affiliation: this.domElements.affiliation.value.trim()
-            };
-        }
+        localStorageRefreshKey: 'refreshOverlayLowerThird', // <<< NEW
+        load: async function() { /* ... (same) ... */ },
+        save: async function() { /* ... (same) ... */ }
     }
+    // Ensure the load and save methods are the complete ones from your working version
 ];
 
-export function initializeControlDomElements() {
+export function initializeControlDomElements() { /* ... (same, it will now also fetch updateButton elements) ... */
     console.log(LOG_PREFIX_CONFIG_MGR, "Initializing DOM elements for overlayControls...");
     overlayControls.forEach(control => {
         control.domElements = {};
         for (const key in control.elements) {
             const elementId = control.elements[key];
-            control.domElements[key] = getEl(elementId); // getEl is imported from ui.js
+            control.domElements[key] = getEl(elementId);
 
             const isOptional = ['manualJsonContainer', 'manualJsonTextarea', 'copyManualJsonButton', 'copyManualFeedback', 'loading'].includes(key);
-            if (!control.domElements[key] && !isOptional) {
+            // Update buttons are critical if defined in elements object
+            const isCriticalIfDefined = !isOptional || key === 'updateButton';
+
+            if (!control.domElements[key] && isCriticalIfDefined) {
                  console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
             } else if (!control.domElements[key] && isOptional && key === 'loading') {
                  console.warn(LOG_PREFIX_CONFIG_MGR, `Optional DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
@@ -116,29 +74,12 @@ export function initializeControlDomElements() {
     console.log(LOG_PREFIX_CONFIG_MGR, "DOM elements for overlayControls initialization complete.");
 }
 
-export async function loadAllConfigs() {
-    const user = getCurrentUser(); // From auth.js
-    if (!supabase || !user) { console.warn(LOG_PREFIX_CONFIG_MGR, "Cannot load configs: Supabase not ready or no user."); return; }
-    console.log(LOG_PREFIX_CONFIG_MGR, "Loading all configurations for user:", user.id);
+export async function loadAllConfigs() { /* ... (same as before) ... */ }
 
-    for (const control of overlayControls) {
-        if (control.domElements.loading) control.domElements.loading.style.display = 'inline';
-        try {
-            console.log(LOG_PREFIX_CONFIG_MGR, `Loading config for: ${control.type}`);
-            await control.load();
-            console.log(LOG_PREFIX_CONFIG_MGR, `Config loaded for: ${control.type}`);
-        } catch (error) {
-            console.error(LOG_PREFIX_CONFIG_MGR, `Error loading config for ${control.type}:`, error.message, error);
-            if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Error loading: ${error.message}`, false);
-        } finally {
-            if (control.domElements.loading) control.domElements.loading.style.display = 'none';
-        }
-    }
-}
-
-export function setupSaveListeners() {
-    console.log(LOG_PREFIX_CONFIG_MGR, "Setting up save listeners...");
+export function setupSaveAndUpdateListeners() { // Renamed from setupSaveListeners
+    console.log(LOG_PREFIX_CONFIG_MGR, "Setting up Save and Update listeners...");
     overlayControls.forEach(control => {
+        // SAVE BUTTON LISTENER (modified to show update button on success)
         if (control.domElements.saveButton) {
             control.domElements.saveButton.addEventListener('click', async () => {
                 console.log(LOG_PREFIX_CONFIG_MGR, `Save button clicked for: ${control.type}`);
@@ -154,53 +95,64 @@ export function setupSaveListeners() {
                     console.log(LOG_PREFIX_CONFIG_MGR, `Attempting to save for ${control.type} (user: ${user.id}):`, configData);
                     const { data: upsertData, error } = await supabase.from('overlay_configurations').upsert(
                         { overlay_type: control.type, config_data: configData, user_id: user.id },
-                        {
-                            onConflict: 'user_id, overlay_type', // *** COLUMNS forming the unique constraint ***
-                            // ignoreDuplicates: false // Default is false, ensures "update" part of "upsert"
-                        }
+                        { onConflict: 'user_id, overlay_type' }
                     );
-                    if (error) {
-                        console.error(LOG_PREFIX_CONFIG_MGR, `Supabase upsert error for ${control.type}:`, JSON.stringify(error, null, 2));
-                        throw error; // This will be caught by the outer catch block
-                    }
+                    if (error) throw error;
+
                     console.log(LOG_PREFIX_CONFIG_MGR, `Save successful for ${control.type}. Response:`, upsertData);
-                    if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved!`, true);
+                    showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved! Click 'Update Overlay' to apply changes.`, true); // Modified feedback
                     if (control.domElements.manualJsonContainer) control.domElements.manualJsonContainer.style.display = 'none';
-                } catch (error) { // Catches errors from control.save() or the upsert operation
-                    console.error(LOG_PREFIX_CONFIG_MGR, `Catch block: Error saving config for ${control.type}:`, error.message, error); // Log the full error object
+
+                    // *** NEW: Show the "Update Overlay" button ***
+                    if (control.domElements.updateButton) {
+                        control.domElements.updateButton.style.display = 'inline-block';
+                        control.domElements.saveButton.style.display = 'none'; // Optionally hide save button
+                    }
+
+                } catch (error) {
+                    console.error(LOG_PREFIX_CONFIG_MGR, `Error saving config for ${control.type}:`, error.message, error);
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Error saving: ${error.message}`, false);
                     if (control.domElements.manualJsonContainer && control.type === 'ticker') {
                         control.domElements.manualJsonContainer.style.display = 'block';
                     }
                 } finally {
+                    // Save button might be hidden now, so re-enable but its state might not matter if hidden
                     control.domElements.saveButton.disabled = false;
                     control.domElements.saveButton.textContent = `Save ${control.displayName} Config`;
                 }
             });
         }
-        // Ticker specific manual copy button
-        if (control.type === 'ticker' && control.domElements.copyManualJsonButton && control.domElements.manualJsonTextarea && control.domElements.copyManualFeedback) {
-             control.domElements.copyManualJsonButton.addEventListener('click', async () => {
-                const tickerTextarea = control.domElements.manualJsonTextarea;
-                const feedbackEl = control.domElements.copyManualFeedback;
-                try {
-                    await navigator.clipboard.writeText(tickerTextarea.value);
-                    feedbackEl.textContent = 'Copied!';
-                    setTimeout(() => { feedbackEl.textContent = ''; }, 2000);
-                } catch (err) {
-                    feedbackEl.textContent = 'Failed to copy.';
+
+        // *** NEW: UPDATE OVERLAY BUTTON LISTENER ***
+        if (control.domElements.updateButton) {
+            control.domElements.updateButton.addEventListener('click', () => {
+                console.log(LOG_PREFIX_CONFIG_MGR, `Update Overlay button clicked for: ${control.type}`);
+                if (!control.localStorageRefreshKey) {
+                    console.error(LOG_PREFIX_CONFIG_MGR, `No localStorageRefreshKey defined for ${control.type}`);
+                    return;
+                }
+                // Send a command via localStorage. The value includes a timestamp to ensure 'storage' event fires.
+                localStorage.setItem(control.localStorageRefreshKey, `refresh_${Date.now()}`);
+                showConfigFeedback(control.domElements.feedback, `${control.displayName} update command sent. Check your overlay.`, true);
+
+                // Hide update button and show save button again
+                control.domElements.updateButton.style.display = 'none';
+                if (control.domElements.saveButton) {
+                    control.domElements.saveButton.style.display = 'inline-block';
                 }
             });
         }
+
+        // Ticker specific manual copy button (same as before)
+        if (control.type === 'ticker' && control.domElements.copyManualJsonButton /*... etc ...*/) {
+            // ... copy button logic ...
+        }
     });
-    console.log(LOG_PREFIX_CONFIG_MGR, "Save listeners set up.");
+    console.log(LOG_PREFIX_CONFIG_MGR, "Save and Update listeners set up.");
 }
 
-export function enableAllDashboardButtons() {
-    document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button')
-        .forEach(btn => btn.disabled = false);
-}
-export function disableAllDashboardButtons() {
-     document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button')
-        .forEach(btn => btn.disabled = true);
-}
+export function enableAllDashboardButtons() { /* ... (same as before) ... */ }
+export function disableAllDashboardButtons() { /* ... (same as before) ... */ }
+
+// --- Ensure load/save methods in overlayControls are complete and correct from your working version ---
+// (e.g., for logo, ticker, lower_third)
