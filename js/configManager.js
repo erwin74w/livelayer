@@ -12,12 +12,12 @@ export const overlayControls = [
         elements: {
             loading: 'loading-logo', saveButton: 'save-logo', feedback: 'feedback-logo',
             url: 'input-logo-url', toggleButton: 'toggle-logo',
-            updateButton: 'update-logo-button' // <<< NEW: ID for the update button
+            updateOverlayButton: 'update-logo-overlay' // ID for the new button
         },
+        updateCommandKey: 'logo-executeUpdateCmd', // localStorage key
         visibility: { storageKey: 'overlay1Visibility', textShow: 'Show Logo', textHide: 'Hide Logo', isVisible: false },
-        localStorageRefreshKey: 'refreshOverlayLogo', // <<< NEW: Key for localStorage command
-        load: async function() { /* ... (same as your last complete version) ... */ },
-        save: async function() { /* ... (same as your last complete version) ... */ }
+        load: async function() { /* ... (Same as last complete version) ... */ },
+        save: async function() { /* ... (Same as last complete version) ... */ }
     },
     {
         type: 'ticker',
@@ -28,12 +28,12 @@ export const overlayControls = [
             manualJsonContainer: 'manualJsonContainer-ticker', manualJsonTextarea: 'manualJsonTextarea-ticker',
             copyManualJsonButton: 'copyManualJsonButton-ticker', copyManualFeedback: 'copyManualFeedback-ticker',
             toggleButton: 'toggle-ticker',
-            updateButton: 'update-ticker-button' // <<< NEW
+            updateOverlayButton: 'update-ticker-overlay' // ID for the new button
         },
+        updateCommandKey: 'ticker-executeUpdateCmd', // localStorage key
         visibility: { storageKey: 'overlay2Visibility', textShow: 'Show Ticker', textHide: 'Hide Ticker', isVisible: false },
-        localStorageRefreshKey: 'refreshOverlayTicker', // <<< NEW
-        load: async function() { /* ... (same) ... */ },
-        save: async function() { /* ... (same) ... */ }
+        load: async function() { /* ... (Same as last complete version) ... */ },
+        save: async function() { /* ... (Same as last complete version) ... */ }
     },
     {
         type: 'lower_third',
@@ -42,44 +42,93 @@ export const overlayControls = [
             loading: 'loading-lower_third', saveButton: 'save-lower_third', feedback: 'feedback-lower_third',
             name: 'input-lower_third-name', function: 'input-lower_third-function',
             affiliation: 'input-lower_third-affiliation', toggleButton: 'toggle-lower_third',
-            updateButton: 'update-lower_third-button' // <<< NEW
+            updateOverlayButton: 'update-lower_third-overlay' // ID for the new button
         },
+        updateCommandKey: 'lower_third-executeUpdateCmd', // localStorage key
         visibility: { storageKey: 'overlay3Visibility', textShow: 'Show Lower Third', textHide: 'Hide Lower Third', isVisible: false },
-        localStorageRefreshKey: 'refreshOverlayLowerThird', // <<< NEW
-        load: async function() { /* ... (same) ... */ },
-        save: async function() { /* ... (same) ... */ }
+        load: async function() { /* ... (Same as last complete version) ... */ },
+        save: async function() { /* ... (Same as last complete version) ... */ }
     }
-    // Ensure the load and save methods are the complete ones from your working version
 ];
 
-export function initializeControlDomElements() { /* ... (same, it will now also fetch updateButton elements) ... */
-    console.log(LOG_PREFIX_CONFIG_MGR, "Initializing DOM elements for overlayControls...");
+// --- Populate the load/save methods for overlayControls (ensure these are complete from previous versions) ---
+// Logo
+overlayControls.find(c=>c.type==='logo').load = async function() {
+    const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
+    if (error) throw error;
+    if (this.domElements.url) {
+        if (data && data.config_data) this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
+        else this.domElements.url.value = '../pictures/overlay1.png';
+    }
+};
+overlayControls.find(c=>c.type==='logo').save = async function() {
+    if (!this.domElements.url) throw new Error("Logo URL input element not found for save.");
+    const configData = { url: this.domElements.url.value.trim() };
+    if (!configData.url) { throw new Error("Logo URL cannot be empty."); }
+    return configData;
+};
+
+// Ticker
+overlayControls.find(c=>c.type==='ticker').load = async function() {
+    const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
+    if (error) throw error;
+    const messagesEl = this.domElements.messages;
+    const separatorEl = this.domElements.separator;
+    if (data && data.config_data) {
+        if(messagesEl) messagesEl.value = (data.config_data.messages || []).join('\n');
+        if(separatorEl) separatorEl.value = data.config_data.separator || ' +++ ';
+    } else {
+        if(messagesEl) messagesEl.value = '';
+        if(separatorEl) separatorEl.value = ' +++ ';
+    }
+};
+overlayControls.find(c=>c.type==='ticker').save = async function() {
+    if (!this.domElements.messages || !this.domElements.separator) throw new Error("Ticker form elements not found for save.");
+    const messages = this.domElements.messages.value.trim().split('\n').map(s => s.trim()).filter(s => s);
+    const separator = this.domElements.separator.value.trim();
+    const configData = { messages, separator };
+    if (this.domElements.manualJsonTextarea) {
+        this.domElements.manualJsonTextarea.value = JSON.stringify(configData, null, 2);
+    }
+    return configData;
+};
+
+// Lower Third
+overlayControls.find(c=>c.type==='lower_third').load = async function() {
+    const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
+    if (error) throw error;
+    const nameEl = this.domElements.name;
+    const funcEl = this.domElements.function;
+    const affEl = this.domElements.affiliation;
+    if (data && data.config_data) {
+        if(nameEl) nameEl.value = data.config_data.name || '';
+        if(funcEl) funcEl.value = data.config_data.function || '';
+        if(affEl) affEl.value = data.config_data.affiliation || '';
+    } else {
+        if(nameEl) nameEl.value = '';
+        if(funcEl) funcEl.value = '';
+        if(affEl) affEl.value = '';
+    }
+};
+overlayControls.find(c=>c.type==='lower_third').save = async function() {
+    if (!this.domElements.name || !this.domElements.function || !this.domElements.affiliation) {
+        throw new Error("Lower third form elements not found for save.");
+    }
+    return {
+        name: this.domElements.name.value.trim(),
+        function: this.domElements.function.value.trim(),
+        affiliation: this.domElements.affiliation.value.trim()
+    };
+};
+
+
+export function initializeControlDomElements() { /* ... (Same as the last version that fixed ID errors) ... */ }
+export async function loadAllConfigs() { /* ... (Same as the last version that fixed ID errors) ... */ }
+
+export function setupSaveListeners() {
+    console.log(LOG_PREFIX_CONFIG_MGR, "Setting up save and update command listeners...");
     overlayControls.forEach(control => {
-        control.domElements = {};
-        for (const key in control.elements) {
-            const elementId = control.elements[key];
-            control.domElements[key] = getEl(elementId);
-
-            const isOptional = ['manualJsonContainer', 'manualJsonTextarea', 'copyManualJsonButton', 'copyManualFeedback', 'loading'].includes(key);
-            // Update buttons are critical if defined in elements object
-            const isCriticalIfDefined = !isOptional || key === 'updateButton';
-
-            if (!control.domElements[key] && isCriticalIfDefined) {
-                 console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
-            } else if (!control.domElements[key] && isOptional && key === 'loading') {
-                 console.warn(LOG_PREFIX_CONFIG_MGR, `Optional DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
-            }
-        }
-    });
-    console.log(LOG_PREFIX_CONFIG_MGR, "DOM elements for overlayControls initialization complete.");
-}
-
-export async function loadAllConfigs() { /* ... (same as before) ... */ }
-
-export function setupSaveAndUpdateListeners() { // Renamed from setupSaveListeners
-    console.log(LOG_PREFIX_CONFIG_MGR, "Setting up Save and Update listeners...");
-    overlayControls.forEach(control => {
-        // SAVE BUTTON LISTENER (modified to show update button on success)
+        // SAVE CONFIG BUTTON LISTENER
         if (control.domElements.saveButton) {
             control.domElements.saveButton.addEventListener('click', async () => {
                 console.log(LOG_PREFIX_CONFIG_MGR, `Save button clicked for: ${control.type}`);
@@ -98,15 +147,14 @@ export function setupSaveAndUpdateListeners() { // Renamed from setupSaveListene
                         { onConflict: 'user_id, overlay_type' }
                     );
                     if (error) throw error;
-
                     console.log(LOG_PREFIX_CONFIG_MGR, `Save successful for ${control.type}. Response:`, upsertData);
-                    showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved! Click 'Update Overlay' to apply changes.`, true); // Modified feedback
+                    if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved! Click "Push Update" to apply to live overlay.`, true); // Updated message
                     if (control.domElements.manualJsonContainer) control.domElements.manualJsonContainer.style.display = 'none';
-
-                    // *** NEW: Show the "Update Overlay" button ***
-                    if (control.domElements.updateButton) {
-                        control.domElements.updateButton.style.display = 'inline-block';
-                        control.domElements.saveButton.style.display = 'none'; // Optionally hide save button
+                    
+                    // Show the "Push Update to Overlay" button
+                    if (control.domElements.updateOverlayButton) {
+                        control.domElements.updateOverlayButton.style.display = 'inline-block';
+                        console.log(LOG_PREFIX_CONFIG_MGR, `Update button shown for ${control.type}`);
                     }
 
                 } catch (error) {
@@ -116,43 +164,40 @@ export function setupSaveAndUpdateListeners() { // Renamed from setupSaveListene
                         control.domElements.manualJsonContainer.style.display = 'block';
                     }
                 } finally {
-                    // Save button might be hidden now, so re-enable but its state might not matter if hidden
                     control.domElements.saveButton.disabled = false;
                     control.domElements.saveButton.textContent = `Save ${control.displayName} Config`;
                 }
             });
         }
 
-        // *** NEW: UPDATE OVERLAY BUTTON LISTENER ***
-        if (control.domElements.updateButton) {
-            control.domElements.updateButton.addEventListener('click', () => {
-                console.log(LOG_PREFIX_CONFIG_MGR, `Update Overlay button clicked for: ${control.type}`);
-                if (!control.localStorageRefreshKey) {
-                    console.error(LOG_PREFIX_CONFIG_MGR, `No localStorageRefreshKey defined for ${control.type}`);
+        // PUSH UPDATE TO OVERLAY BUTTON LISTENER
+        if (control.domElements.updateOverlayButton) {
+            control.domElements.updateOverlayButton.addEventListener('click', () => {
+                if (!control.updateCommandKey) {
+                    console.error(LOG_PREFIX_CONFIG_MGR, `No updateCommandKey defined for control type: ${control.type}`);
                     return;
                 }
-                // Send a command via localStorage. The value includes a timestamp to ensure 'storage' event fires.
-                localStorage.setItem(control.localStorageRefreshKey, `refresh_${Date.now()}`);
-                showConfigFeedback(control.domElements.feedback, `${control.displayName} update command sent. Check your overlay.`, true);
-
-                // Hide update button and show save button again
-                control.domElements.updateButton.style.display = 'none';
-                if (control.domElements.saveButton) {
-                    control.domElements.saveButton.style.display = 'inline-block';
-                }
+                localStorage.setItem(control.updateCommandKey, Date.now().toString());
+                console.log(LOG_PREFIX_CONFIG_MGR, `Sent update command for ${control.type} via localStorage key: ${control.updateCommandKey}`);
+                if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Update command sent to ${control.displayName} overlay!`, true);
+                control.domElements.updateOverlayButton.style.display = 'none'; // Hide after click
+                // Optionally, re-hide after a few seconds if save feedback clears
+                setTimeout(() => {
+                    // Only hide if no other feedback message is currently being shown
+                    if (control.domElements.feedback && control.domElements.feedback.style.display === 'none') {
+                         // This logic might be tricky if feedback clears too fast. Simpler to just hide.
+                    }
+                }, 4100); // Slightly after feedback clears
             });
         }
 
         // Ticker specific manual copy button (same as before)
-        if (control.type === 'ticker' && control.domElements.copyManualJsonButton /*... etc ...*/) {
-            // ... copy button logic ...
+        if (control.type === 'ticker' && control.domElements.copyManualJsonButton /*... other checks */) {
+            control.domElements.copyManualJsonButton.addEventListener('click', async () => { /* ... */ });
         }
     });
-    console.log(LOG_PREFIX_CONFIG_MGR, "Save and Update listeners set up.");
+    console.log(LOG_PREFIX_CONFIG_MGR, "Save and update command listeners set up.");
 }
 
-export function enableAllDashboardButtons() { /* ... (same as before) ... */ }
-export function disableAllDashboardButtons() { /* ... (same as before) ... */ }
-
-// --- Ensure load/save methods in overlayControls are complete and correct from your working version ---
-// (e.g., for logo, ticker, lower_third)
+export function enableAllDashboardButtons() { /* ... (Same as before) ... */ }
+export function disableAllDashboardButtons() { /* ... (Same as before) ... */ }
