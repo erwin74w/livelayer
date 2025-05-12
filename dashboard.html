@@ -39,10 +39,9 @@
                 <strong>Your Public Overlay Link:</strong>
                 <input type="text" id="publicOverlayUrl" readonly style="width: 100%; margin-top: 5px; background-color: #f0f0f0; cursor: text; padding: 8px;">
                 <button id="copyOverlayUrlButton" class="config-save-button secondary" style="margin-top:5px;">Copy Link</button>
-                <span id="copyUrlFeedback" class="copy-manual-feedback"></span> <!-- Re-used class, ensure styling is appropriate -->
+                <span id="copyUrlFeedback" class="copy-manual-feedback"></span>
             </div>
             <hr style="margin: 20px 0;">
-
 
             <!-- Logo (Overlay 1) -->
             <details id="details-logo">
@@ -108,111 +107,189 @@
 
     <script>
         // --- START SCRIPT ---
+        console.log("Dashboard script: STARTING"); // <<< NEW DEBUG LOG
+
         const LOG_PREFIX_DASH = "Dashboard:";
         let supabaseClient = null;
         let currentUser = null;
 
         // DOM Elements
+        console.log("Dashboard script: Defining DOM element constants..."); // <<< NEW DEBUG LOG
         const initErrorEl = document.getElementById('initError');
         const authSectionEl = document.getElementById('authSection');
         const dashboardContentEl = document.getElementById('dashboardContent');
         const authEmailInputEl = document.getElementById('authEmail');
-        const sendMagicLinkButtonEl = document.getElementById('sendMagicLinkButton');
+        const sendMagicLinkButtonEl = document.getElementById('sendMagicLinkButton'); // Check if this is found
         const authFeedbackEl = document.getElementById('authFeedback');
         const userEmailDisplayEl = document.getElementById('userEmailDisplay');
         const logoutButtonEl = document.getElementById('logoutButton');
         const publicOverlayUrlEl = document.getElementById('publicOverlayUrl');
-        const copyOverlayUrlButtonEl = document.getElementById('copyOverlayUrlButton'); // Defined
-        const copyUrlFeedbackEl = document.getElementById('copyUrlFeedback');     // Defined
+        const copyOverlayUrlButtonEl = document.getElementById('copyOverlayUrlButton');
+        const copyUrlFeedbackEl = document.getElementById('copyUrlFeedback');
+        console.log("Dashboard script: sendMagicLinkButtonEl is:", sendMagicLinkButtonEl); // <<< NEW DEBUG LOG
+
+        // UI Elements for loading indicators
+        const tickerLoadingEl = getEl('loading-ticker'); // Using getEl helper
+        const ltLoadingEl = getEl('loading-lower_third');
+        const logoLoadingEl = getEl('loading-logo');
+
 
         // --- Utility & Feedback ---
         function getEl(id) { return document.getElementById(id); }
-        function showAuthFeedback(message, isSuccess) { /* ... (same as before) ... */ }
-        function showConfigFeedback(element, message, isSuccess) { /* ... (same as before) ... */ }
+        function showAuthFeedback(message, isSuccess) {
+            if (!authFeedbackEl) { console.error(LOG_PREFIX_DASH, "authFeedbackEl not found!"); return; }
+            authFeedbackEl.textContent = message;
+            authFeedbackEl.className = 'feedback ' + (isSuccess ? 'success' : 'error');
+            authFeedbackEl.style.display = 'block';
+            setTimeout(() => { authFeedbackEl.style.display = 'none'; }, isSuccess ? 4000 : 7000);
+        }
+        function showConfigFeedback(element, message, isSuccess) {
+            if (!element) { console.warn(LOG_PREFIX_DASH, "Feedback element not found for message:", message); return; }
+            element.textContent = message;
+            element.className = 'feedback ' + (isSuccess ? 'success' : 'error');
+            element.style.display = 'block';
+            setTimeout(() => { element.style.display = 'none'; }, 4000);
+        }
 
 
         // --- Supabase Initialization ---
-        async function initializeSupabase() { /* ... (same as before, with logs) ... */ }
-
-        // --- Authentication Logic ---
-        async function handleSendMagicLink() { /* ... (same as before, with explicit redirectTo) ... */ }
-        async function handleLogout() { /* ... (same as before) ... */ }
-
-        function updateUIForAuthState(user) {
-            currentUser = user;
-            if (user) {
-                // ... (same as before, show dashboard, set user email) ...
-                const baseDomain = window.location.origin;
-                const pathSegments = window.location.pathname.split('/');
-                pathSegments.pop();
-                const basePath = pathSegments.join('/');
-                const userSpecificOverlayUrl = `${baseDomain}${basePath}/index.html?user=${user.id}`;
-                publicOverlayUrlEl.value = userSpecificOverlayUrl;
-
-                // ... (enable buttons, loadAllConfigs, initializeVisibilityToggles) ...
-            } else {
-                // ... (show auth section, disable buttons) ...
+        async function initializeSupabase() {
+            console.log(LOG_PREFIX_DASH, "Attempting to initialize Supabase...");
+            try {
+                const response = await fetch('keys.json');
+                console.log(LOG_PREFIX_DASH, "Fetched keys.json, status:", response.status);
+                if (!response.ok) throw new Error(`HTTP ${response.status} fetching keys.json`);
+                const keys = await response.json();
+                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
+                    throw new Error("Supabase URL/Key missing or placeholder in keys.json.");
+                }
+                const { createClient } = supabase;
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+                console.log(LOG_PREFIX_DASH, "Supabase client initialized successfully.");
+                return true;
+            } catch (error) {
+                console.error(LOG_PREFIX_DASH, "Failed to initialize Supabase:", error.message, error);
+                if(initErrorEl) {
+                    initErrorEl.textContent = `Supabase Initialization Error: ${error.message}. Cannot proceed.`;
+                    initErrorEl.style.display = 'block';
+                }
+                if(authSectionEl) authSectionEl.style.display = 'none';
+                return false;
             }
         }
-        
-        // Moved copyOverlayUrlButtonEl event listener to be definitely after element is known
-        // and ensure it's only active when the dashboard is visible.
-        if (copyOverlayUrlButtonEl) { // Check if element exists (it should)
-            copyOverlayUrlButtonEl.addEventListener('click', async () => {
-                if (!publicOverlayUrlEl.value) {
-                    console.warn(LOG_PREFIX_DASH, "Copy URL: No URL to copy.");
-                    if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = 'No URL generated yet.';
-                    return;
+
+        // --- Authentication Logic ---
+        async function handleSendMagicLink() {
+            console.log(LOG_PREFIX_DASH, "handleSendMagicLink called."); // <<< NEW DEBUG LOG
+            if (!supabaseClient) {
+                showAuthFeedback("Supabase not initialized. Cannot send magic link.", false);
+                console.error(LOG_PREFIX_DASH, "handleSendMagicLink: Supabase client not ready.");
+                return;
+            }
+            const email = authEmailInputEl.value.trim();
+            if (!email) {
+                showAuthFeedback("Please enter your email.", false);
+                return;
+            }
+
+            console.log(LOG_PREFIX_DASH, "handleSendMagicLink: Disabling button, email:", email); // <<< NEW DEBUG LOG
+            sendMagicLinkButtonEl.disabled = true;
+            sendMagicLinkButtonEl.textContent = 'Sending...';
+
+            const redirectTo = window.location.href;
+            console.log(LOG_PREFIX_DASH, "Magic Link redirectTo:", redirectTo);
+
+            try {
+                const { error } = await supabaseClient.auth.signInWithOtp({
+                    email: email,
+                    options: { emailRedirectTo: redirectTo }
+                });
+
+                sendMagicLinkButtonEl.disabled = false;
+                sendMagicLinkButtonEl.textContent = 'Send Magic Link';
+
+                if (error) {
+                    console.error(LOG_PREFIX_DASH, "Magic link error:", error);
+                    showAuthFeedback(`Error: ${error.message}`, false);
+                } else {
+                    console.log(LOG_PREFIX_DASH, "Magic link request successful for:", email); // <<< NEW DEBUG LOG
+                    showAuthFeedback("Magic link sent! Check your email (and spam folder). Click the link to log in here.", true);
                 }
-                try {
-                    await navigator.clipboard.writeText(publicOverlayUrlEl.value);
-                    if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = 'Copied!';
-                    setTimeout(() => { if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = ''; }, 2000);
-                } catch (err) {
-                    if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = 'Copy failed. Please copy manually.';
-                    console.error(LOG_PREFIX_DASH, "Failed to copy URL:", err);
-                }
-            });
+            } catch (e) {
+                 console.error(LOG_PREFIX_DASH, "Exception in handleSendMagicLink:", e);
+                 showAuthFeedback("An unexpected error occurred. Please try again.", false);
+                 sendMagicLinkButtonEl.disabled = false;
+                 sendMagicLinkButtonEl.textContent = 'Send Magic Link';
+            }
         }
+
+        async function handleLogout() { /* ... (same as before) ... */ }
+        function updateUIForAuthState(user) { /* ... (same as before) ... */ }
+        if (copyOverlayUrlButtonEl) { copyOverlayUrlButtonEl.addEventListener('click', async () => { /* ... (same as before) ... */ }); }
 
 
         // --- Overlay Control Configuration Array ---
-        // (This full structure is from the last version where ReferenceErrors were fixed)
-        const overlayControls = [
-            // ... (Logo object definition - same as before, using this.elements)
-            // ... (Ticker object definition - same as before, using this.elements)
-            // ... (Lower Third object definition - same as before, using this.elements)
-        ];
-         // (Ensure the full overlayControls array and its methods are here from the last complete working version)
-         // For brevity, I'm re-pasting one example, ensure all are complete
-        /* Example for Ticker from last version:
-            {
-                type: 'ticker',
-                displayName: 'Ticker',
-                elements: { ... getEl calls ... },
-                visibility: { ... },
-                load: async function() { ... using this.elements ... },
-                save: async function() { ... using this.elements ... }
-            },
-        */
-
+        // (Ensure this is the complete and correct version from previous responses)
+        const overlayControls = [ /* ... */ ];
+        // ... (loadConfigFn and saveConfigFn for each control, using this.elements) ...
 
         // --- Generic Load and Save Config Logic ---
-        async function loadAllConfigs() { /* ... (same as before, uses control.load.call(control)) ... */ }
-        // Attach save event listeners section (same as before, uses control.save.call(control))
-        // Make sure to iterate over overlayControls and attach listeners to control.elements.saveButton
+        async function loadAllConfigs() { /* ... (same as before) ... */ }
+        // Attach save event listeners loop (same as before)
 
         // --- Visibility Toggle Logic ---
         function updateVisibilityButtonUI(control) { /* ... (same) ... */ }
         function setOverlayVisibilityInStorage(storageKey, visible) { /* ... (same) ... */ }
-        function initializeVisibilityToggles() { /* ... (same, iterates overlayControls) ... */ }
-        window.addEventListener('storage', (event) => { /* ... (same, iterates overlayControls) ... */ });
+        function initializeVisibilityToggles() { /* ... (same) ... */ }
+        window.addEventListener('storage', (event) => { /* ... (same) ... */ });
 
 
         // --- DOMContentLoaded & Main Execution Flow ---
         document.addEventListener('DOMContentLoaded', async () => {
-            // ... (same as before, calls initializeSupabase, sets up auth listeners, calls updateUIForAuthState)
+            console.log(LOG_PREFIX_DASH, "DOMContentLoaded event START."); // <<< NEW DEBUG LOG
+
+            // Ensure sendMagicLinkButtonEl is available before attaching listener
+            if (sendMagicLinkButtonEl) {
+                console.log(LOG_PREFIX_DASH, "Attaching event listener to sendMagicLinkButton."); // <<< NEW DEBUG LOG
+                sendMagicLinkButtonEl.addEventListener('click', handleSendMagicLink);
+            } else {
+                console.error(LOG_PREFIX_DASH, "sendMagicLinkButtonEl NOT FOUND when trying to attach listener!"); // <<< NEW DEBUG LOG
+            }
+            if (logoutButtonEl) { // Also good to check other critical buttons
+                 logoutButtonEl.addEventListener('click', handleLogout);
+            }
+
+
+            const initialized = await initializeSupabase();
+            if (initialized) {
+                if(initErrorEl) initErrorEl.style.display = 'none';
+
+                // Moved auth button listeners here, after we know supabaseClient *might* be ready
+                // This is a bit redundant if they are already attached, but safe.
+                // However, it's better to attach them once. The check above is more important.
+
+
+                supabaseClient.auth.onAuthStateChange((event, session) => {
+                    console.log(LOG_PREFIX_DASH, "Auth state change event:", event, "Session:", session);
+                    updateUIForAuthState(session?.user || null);
+                });
+
+                console.log(LOG_PREFIX_DASH, "Checking initial Supabase session...");
+                const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+                if (sessionError) {
+                    console.error(LOG_PREFIX_DASH, "Error getting initial session:", sessionError);
+                    showAuthFeedback("Could not check login status. Try refreshing.", false);
+                } else {
+                    console.log(LOG_PREFIX_DASH, "Initial session:", session);
+                    updateUIForAuthState(session?.user || null);
+                }
+            } else {
+                console.warn(LOG_PREFIX_DASH, "Supabase not initialized after DOMContentLoaded. Dashboard cannot function.");
+                if(authSectionEl) authSectionEl.innerHTML = `<p class="error" style="text-align:center;">Critical error: Could not connect to services. Please check configuration.</p>`;
+            }
+            console.log(LOG_PREFIX_DASH, "DOMContentLoaded event END."); // <<< NEW DEBUG LOG
         });
+        console.log("Dashboard script: ENDING"); // <<< NEW DEBUG LOG
         // --- END SCRIPT ---
     </script>
 </body>
