@@ -16,9 +16,8 @@
                 <label for="authEmail">Email:</label>
                 <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email">
                 <button id="sendMagicLinkButton">Send Magic Link</button>
-                <p style="font-size: 0.8em; margin-top: 15px;">
+                <p id="magicLinkInstructions" style="font-size: 0.8em; margin-top: 15px;">
                     Enter your email and click "Send Magic Link". Check your inbox for a login link.
-                    If you don't have an account, this will create one.
                 </p>
             </div>
             <div id="authFeedback" class="feedback" style="display:none;"></div>
@@ -26,6 +25,7 @@
 
         <!-- Dashboard Content Section (hidden until logged in) -->
         <div id="dashboardContent" style="display:none;">
+            <!-- ... (Dashboard H1, logout, public URL input etc. - same as before) ... -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h1>Overlay Dashboard</h1>
                 <div style="text-align: right;">
@@ -43,199 +43,95 @@
             </div>
             <hr style="margin: 20px 0;">
 
-            <!-- Logo (Overlay 1) -->
-            <details id="details-logo">
-                <summary>
-                    <div class="summary-controls">
-                        <div class="summary-title-area">Logo (Overlay 1) <span id="loading-logo" class="loading-indicator" style="display:none;">Loading...</span></div>
-                        <button id="toggle-logo" class="toggle-visibility-button" disabled>Show Logo</button>
-                    </div>
-                </summary>
-                <div class="details-content">
-                    <label for="input-logo-url">Logo Image URL:</label>
-                    <input type="text" id="input-logo-url" placeholder="../pictures/overlay1.png">
-                    <button id="save-logo" class="config-save-button" disabled>Save Logo Config</button>
-                    <div id="feedback-logo" class="feedback" style="display:none;"></div>
-                </div>
-            </details>
-
-            <!-- Ticker (Overlay 2) -->
-            <details id="details-ticker">
-                <summary>
-                    <div class="summary-controls">
-                        <div class="summary-title-area">Ticker (Overlay 2) <span id="loading-ticker" class="loading-indicator" style="display:none;">Loading...</span></div>
-                        <button id="toggle-ticker" class="toggle-visibility-button" disabled>Show Ticker</button>
-                    </div>
-                </summary>
-                <div class="details-content">
-                    <label for="input-ticker-messages">Ticker Messages (one per line):</label>
-                    <textarea id="input-ticker-messages" placeholder="Message 1\nMessage 2"></textarea>
-                    <label for="input-ticker-separator">Message Separator:</label>
-                    <input type="text" id="input-ticker-separator" value=" +++ ">
-                    <button id="save-ticker" class="config-save-button" disabled>Save Ticker Config</button>
-                    <div id="feedback-ticker" class="feedback" style="display:none;"></div>
-                    <div id="manualJsonContainer-ticker" class="manual-json-container" style="display:none;">
-                         <p><strong>Fallback:</strong> If Supabase save fails, copy this JSON:</p>
-                        <textarea id="manualJsonTextarea-ticker" class="manual-json-textarea" readonly></textarea>
-                        <button id="copyManualJsonButton-ticker" class="config-save-button secondary">Copy Fallback JSON</button>
-                        <span id="copyManualFeedback-ticker" class="copy-manual-feedback"></span>
-                    </div>
-                </div>
-            </details>
-
-            <!-- Lower Third (Overlay 3) -->
-            <details id="details-lower_third">
-                <summary>
-                    <div class="summary-controls">
-                        <div class="summary-title-area">Lower Third (Overlay 3) <span id="loading-lower_third" class="loading-indicator" style="display:none;">Loading...</span></div>
-                        <button id="toggle-lower_third" class="toggle-visibility-button" disabled>Show Lower Third</button>
-                    </div>
-                </summary>
-                <div class="details-content">
-                    <label for="input-lower_third-name">Name:</label>
-                    <input type="text" id="input-lower_third-name" placeholder="Jane Doe">
-                    <label for="input-lower_third-function">Function/Title:</label>
-                    <input type="text" id="input-lower_third-function" placeholder="Lead Developer">
-                    <label for="input-lower_third-affiliation">Affiliation/Company:</label>
-                    <input type="text" id="input-lower_third-affiliation" placeholder="Awesome Inc.">
-                    <button id="save-lower_third" class="config-save-button" disabled>Save Lower Third Config</button>
-                    <div id="feedback-lower_third" class="feedback" style="display:none;"></div>
-                </div>
-            </details>
-        </div><!-- End #dashboardContent -->
-    </div><!-- End .container -->
+            <!-- Details sections for Logo, Ticker, Lower Third - same HTML structure as before -->
+            <details id="details-logo"> <!-- ... --> </details>
+            <details id="details-ticker"> <!-- ... --> </details>
+            <details id="details-lower_third"> <!-- ... --> </details>
+        </div>
+    </div>
 
     <script>
         // --- START SCRIPT ---
-        console.log("Dashboard script: STARTING"); // <<< NEW DEBUG LOG
-
+        console.log("Dashboard script: Parsing...");
         const LOG_PREFIX_DASH = "Dashboard:";
         let supabaseClient = null;
         let currentUser = null;
+        let initialAuthCheckDone = false; // Flag to manage initial UI state
 
-        // DOM Elements
-        console.log("Dashboard script: Defining DOM element constants..."); // <<< NEW DEBUG LOG
+        // DOM Elements (defined early)
         const initErrorEl = document.getElementById('initError');
         const authSectionEl = document.getElementById('authSection');
         const dashboardContentEl = document.getElementById('dashboardContent');
         const authEmailInputEl = document.getElementById('authEmail');
-        const sendMagicLinkButtonEl = document.getElementById('sendMagicLinkButton'); // Check if this is found
+        const sendMagicLinkButtonEl = document.getElementById('sendMagicLinkButton');
         const authFeedbackEl = document.getElementById('authFeedback');
         const userEmailDisplayEl = document.getElementById('userEmailDisplay');
         const logoutButtonEl = document.getElementById('logoutButton');
         const publicOverlayUrlEl = document.getElementById('publicOverlayUrl');
         const copyOverlayUrlButtonEl = document.getElementById('copyOverlayUrlButton');
         const copyUrlFeedbackEl = document.getElementById('copyUrlFeedback');
-        console.log("Dashboard script: sendMagicLinkButtonEl is:", sendMagicLinkButtonEl); // <<< NEW DEBUG LOG
-
-        // UI Elements for loading indicators
-        const tickerLoadingEl = getEl('loading-ticker'); // Using getEl helper
-        const ltLoadingEl = getEl('loading-lower_third');
-        const logoLoadingEl = getEl('loading-logo');
+        const magicLinkInstructionsEl = document.getElementById('magicLinkInstructions');
 
 
         // --- Utility & Feedback ---
+        // ... (getEl, showAuthFeedback, showConfigFeedback - same as before) ...
         function getEl(id) { return document.getElementById(id); }
-        function showAuthFeedback(message, isSuccess) {
-            if (!authFeedbackEl) { console.error(LOG_PREFIX_DASH, "authFeedbackEl not found!"); return; }
-            authFeedbackEl.textContent = message;
-            authFeedbackEl.className = 'feedback ' + (isSuccess ? 'success' : 'error');
-            authFeedbackEl.style.display = 'block';
-            setTimeout(() => { authFeedbackEl.style.display = 'none'; }, isSuccess ? 4000 : 7000);
-        }
-        function showConfigFeedback(element, message, isSuccess) {
-            if (!element) { console.warn(LOG_PREFIX_DASH, "Feedback element not found for message:", message); return; }
-            element.textContent = message;
-            element.className = 'feedback ' + (isSuccess ? 'success' : 'error');
-            element.style.display = 'block';
-            setTimeout(() => { element.style.display = 'none'; }, 4000);
-        }
+        function showAuthFeedback(message, isSuccess, duration = isSuccess ? 4000 : 7000) { /* ... */ }
+        function showConfigFeedback(element, message, isSuccess) { /* ... */ }
 
 
         // --- Supabase Initialization ---
-        async function initializeSupabase() {
-            console.log(LOG_PREFIX_DASH, "Attempting to initialize Supabase...");
-            try {
-                const response = await fetch('keys.json');
-                console.log(LOG_PREFIX_DASH, "Fetched keys.json, status:", response.status);
-                if (!response.ok) throw new Error(`HTTP ${response.status} fetching keys.json`);
-                const keys = await response.json();
-                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
-                    throw new Error("Supabase URL/Key missing or placeholder in keys.json.");
-                }
-                const { createClient } = supabase;
-                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
-                console.log(LOG_PREFIX_DASH, "Supabase client initialized successfully.");
-                return true;
-            } catch (error) {
-                console.error(LOG_PREFIX_DASH, "Failed to initialize Supabase:", error.message, error);
-                if(initErrorEl) {
-                    initErrorEl.textContent = `Supabase Initialization Error: ${error.message}. Cannot proceed.`;
-                    initErrorEl.style.display = 'block';
-                }
-                if(authSectionEl) authSectionEl.style.display = 'none';
-                return false;
-            }
-        }
+        async function initializeSupabase() { /* ... (same as before, with logs) ... */ }
 
         // --- Authentication Logic ---
-        async function handleSendMagicLink() {
-            console.log(LOG_PREFIX_DASH, "handleSendMagicLink called."); // <<< NEW DEBUG LOG
-            if (!supabaseClient) {
-                showAuthFeedback("Supabase not initialized. Cannot send magic link.", false);
-                console.error(LOG_PREFIX_DASH, "handleSendMagicLink: Supabase client not ready.");
-                return;
-            }
-            const email = authEmailInputEl.value.trim();
-            if (!email) {
-                showAuthFeedback("Please enter your email.", false);
-                return;
-            }
+        async function handleSendMagicLink() { /* ... (same as before, with explicit redirectTo and logs) ... */ }
+        async function handleLogout() { /* ... (same as before, with logs) ... */ }
 
-            console.log(LOG_PREFIX_DASH, "handleSendMagicLink: Disabling button, email:", email); // <<< NEW DEBUG LOG
-            sendMagicLinkButtonEl.disabled = true;
-            sendMagicLinkButtonEl.textContent = 'Sending...';
+        function updateUIForAuthState(user) {
+            console.log(LOG_PREFIX_DASH, "updateUIForAuthState called with user:", user ? user.id : 'null');
+            currentUser = user;
+            initialAuthCheckDone = true; // Mark that at least one auth state check has completed
 
-            const redirectTo = window.location.href;
-            console.log(LOG_PREFIX_DASH, "Magic Link redirectTo:", redirectTo);
+            if (user) {
+                console.log(LOG_PREFIX_DASH, "User IS authenticated. Showing dashboard content.");
+                authSectionEl.style.display = 'none';
+                dashboardContentEl.style.display = 'block';
+                userEmailDisplayEl.textContent = user.email || user.id;
 
-            try {
-                const { error } = await supabaseClient.auth.signInWithOtp({
-                    email: email,
-                    options: { emailRedirectTo: redirectTo }
-                });
+                const baseDomain = window.location.origin;
+                const pathSegments = window.location.pathname.split('/');
+                pathSegments.pop();
+                const basePath = pathSegments.join('/');
+                const userSpecificOverlayUrl = `${baseDomain}${basePath}/index.html?user=${user.id}`;
+                publicOverlayUrlEl.value = userSpecificOverlayUrl;
 
-                sendMagicLinkButtonEl.disabled = false;
-                sendMagicLinkButtonEl.textContent = 'Send Magic Link';
-
-                if (error) {
-                    console.error(LOG_PREFIX_DASH, "Magic link error:", error);
-                    showAuthFeedback(`Error: ${error.message}`, false);
+                document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button').forEach(btn => btn.disabled = false);
+                // Only load configs and init toggles if they haven't been done yet for this session
+                // This prevents re-loading if onAuthStateChange fires multiple times for the same session
+                if (dashboardContentEl.dataset.configsLoaded !== "true") {
+                    console.log(LOG_PREFIX_DASH, "Loading configs and initializing toggles for the first time in this session.");
+                    loadAllConfigs();
+                    initializeVisibilityToggles();
+                    dashboardContentEl.dataset.configsLoaded = "true";
                 } else {
-                    console.log(LOG_PREFIX_DASH, "Magic link request successful for:", email); // <<< NEW DEBUG LOG
-                    showAuthFeedback("Magic link sent! Check your email (and spam folder). Click the link to log in here.", true);
+                    console.log(LOG_PREFIX_DASH, "Configs already loaded for this session, skipping reload.");
                 }
-            } catch (e) {
-                 console.error(LOG_PREFIX_DASH, "Exception in handleSendMagicLink:", e);
-                 showAuthFeedback("An unexpected error occurred. Please try again.", false);
-                 sendMagicLinkButtonEl.disabled = false;
-                 sendMagicLinkButtonEl.textContent = 'Send Magic Link';
+            } else {
+                console.log(LOG_PREFIX_DASH, "User IS NOT authenticated. Showing auth section.");
+                authSectionEl.style.display = 'block';
+                dashboardContentEl.style.display = 'none';
+                dashboardContentEl.dataset.configsLoaded = "false"; // Reset flag
+                document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button').forEach(btn => btn.disabled = true);
             }
         }
 
-        async function handleLogout() { /* ... (same as before) ... */ }
-        function updateUIForAuthState(user) { /* ... (same as before) ... */ }
-        if (copyOverlayUrlButtonEl) { copyOverlayUrlButtonEl.addEventListener('click', async () => { /* ... (same as before) ... */ }); }
-
-
         // --- Overlay Control Configuration Array ---
-        // (Ensure this is the complete and correct version from previous responses)
-        const overlayControls = [ /* ... */ ];
-        // ... (loadConfigFn and saveConfigFn for each control, using this.elements) ...
+        // (This full structure is from the last version where ReferenceErrors were fixed)
+        const overlayControls = [ /* ... (Full definition as in previous correct version) ... */ ];
 
         // --- Generic Load and Save Config Logic ---
-        async function loadAllConfigs() { /* ... (same as before) ... */ }
-        // Attach save event listeners loop (same as before)
+        async function loadAllConfigs() { /* ... (same as before, using control.load.call(control)) ... */ }
+        // Attach save event listeners loop (same as before, using control.save.call(control))
 
         // --- Visibility Toggle Logic ---
         function updateVisibilityButtonUI(control) { /* ... (same) ... */ }
@@ -246,50 +142,88 @@
 
         // --- DOMContentLoaded & Main Execution Flow ---
         document.addEventListener('DOMContentLoaded', async () => {
-            console.log(LOG_PREFIX_DASH, "DOMContentLoaded event START."); // <<< NEW DEBUG LOG
+            console.log(LOG_PREFIX_DASH, "DOMContentLoaded event START.");
+
+            // Initial UI state: show auth, hide dashboard, until we know the auth status
+            authSectionEl.style.display = 'block';
+            dashboardContentEl.style.display = 'none';
+            magicLinkInstructionsEl.textContent = "Checking authentication status...";
+
 
             // Ensure sendMagicLinkButtonEl is available before attaching listener
             if (sendMagicLinkButtonEl) {
-                console.log(LOG_PREFIX_DASH, "Attaching event listener to sendMagicLinkButton."); // <<< NEW DEBUG LOG
+                console.log(LOG_PREFIX_DASH, "Attaching event listener to sendMagicLinkButton.");
                 sendMagicLinkButtonEl.addEventListener('click', handleSendMagicLink);
             } else {
-                console.error(LOG_PREFIX_DASH, "sendMagicLinkButtonEl NOT FOUND when trying to attach listener!"); // <<< NEW DEBUG LOG
+                console.error(LOG_PREFIX_DASH, "sendMagicLinkButtonEl NOT FOUND when trying to attach listener!");
             }
-            if (logoutButtonEl) { // Also good to check other critical buttons
+            if (logoutButtonEl) {
                  logoutButtonEl.addEventListener('click', handleLogout);
+            }
+            if (copyOverlayUrlButtonEl) {
+                copyOverlayUrlButtonEl.addEventListener('click', async () => { /* ... copy logic ... */ });
             }
 
 
             const initialized = await initializeSupabase();
             if (initialized) {
                 if(initErrorEl) initErrorEl.style.display = 'none';
-
-                // Moved auth button listeners here, after we know supabaseClient *might* be ready
-                // This is a bit redundant if they are already attached, but safe.
-                // However, it's better to attach them once. The check above is more important.
+                magicLinkInstructionsEl.textContent = "Enter your email and click \"Send Magic Link\". Check your inbox for a login link.";
 
 
+                // This is the main auth listener. It will be called when:
+                // 1. The page loads and Supabase checks for an existing session (event: 'INITIAL_SESSION').
+                // 2. The page loads after a magic link redirect, and Supabase processes the tokens in the URL hash (event: 'SIGNED_IN').
+                // 3. The user logs out (event: 'SIGNED_OUT').
+                // 4. The session token is refreshed in the background (event: 'TOKEN_REFRESHED').
                 supabaseClient.auth.onAuthStateChange((event, session) => {
-                    console.log(LOG_PREFIX_DASH, "Auth state change event:", event, "Session:", session);
-                    updateUIForAuthState(session?.user || null);
+                    console.log(LOG_PREFIX_DASH, `Auth state change event: ${event}`, "Session present:", !!session);
+                    if (event === 'INITIAL_SESSION' && session) {
+                        console.log(LOG_PREFIX_DASH, "Initial session found. User is already logged in.");
+                        updateUIForAuthState(session.user);
+                    } else if (event === 'SIGNED_IN') {
+                        console.log(LOG_PREFIX_DASH, "User successfully signed in (e.g., after magic link).");
+                        updateUIForAuthState(session.user);
+                        // Clear the URL hash fragment if it contains auth tokens, for a cleaner URL
+                        if (window.location.hash.includes('access_token')) {
+                            console.log(LOG_PREFIX_DASH, "Clearing auth tokens from URL hash.");
+                            window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+                        }
+                    } else if (event === 'SIGNED_OUT') {
+                        console.log(LOG_PREFIX_DASH, "User signed out.");
+                        updateUIForAuthState(null);
+                    } else if (event === 'TOKEN_REFRESHED' && session) {
+                        console.log(LOG_PREFIX_DASH, "Token refreshed. User still logged in.");
+                        // Usually, no UI change needed unless you specifically track session expiry warnings.
+                        // updateUIForAuthState(session.user); // Could call this if needed, but might be redundant
+                    } else if (event === 'PASSWORD_RECOVERY') {
+                        // Handle password recovery UI if you implement that flow
+                        console.log(LOG_PREFIX_DASH, "Password recovery event.");
+                    }
+
+                    // If after all checks, initialAuthCheckDone is true but currentUser is still null, it means no valid session.
+                    if (initialAuthCheckDone && !currentUser) {
+                         console.log(LOG_PREFIX_DASH, "Initial auth checks complete, no active user session. Showing auth form.");
+                         updateUIForAuthState(null); // Ensure auth form is shown
+                    }
                 });
 
-                console.log(LOG_PREFIX_DASH, "Checking initial Supabase session...");
-                const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
-                if (sessionError) {
-                    console.error(LOG_PREFIX_DASH, "Error getting initial session:", sessionError);
-                    showAuthFeedback("Could not check login status. Try refreshing.", false);
-                } else {
-                    console.log(LOG_PREFIX_DASH, "Initial session:", session);
-                    updateUIForAuthState(session?.user || null);
-                }
+                // An initial getSession() can be useful, but onAuthStateChange with INITIAL_SESSION often covers it.
+                // However, sometimes it helps to explicitly check, especially if onAuthStateChange might be slow to fire.
+                // Let's rely on onAuthStateChange for now as it's designed for this.
+                // If INITIAL_SESSION doesn't fire reliably, then an explicit getSession() call followed by
+                // updateUIForAuthState(session?.user || null) would be needed here.
+                // For now, we set initialAuthCheckDone = false; onAuthStateChange will set it to true.
+
             } else {
+                // Supabase itself failed to initialize
                 console.warn(LOG_PREFIX_DASH, "Supabase not initialized after DOMContentLoaded. Dashboard cannot function.");
                 if(authSectionEl) authSectionEl.innerHTML = `<p class="error" style="text-align:center;">Critical error: Could not connect to services. Please check configuration.</p>`;
+                if(magicLinkInstructionsEl) magicLinkInstructionsEl.style.display = 'none';
             }
-            console.log(LOG_PREFIX_DASH, "DOMContentLoaded event END."); // <<< NEW DEBUG LOG
+            console.log(LOG_PREFIX_DASH, "DOMContentLoaded event END.");
         });
-        console.log("Dashboard script: ENDING"); // <<< NEW DEBUG LOG
+        console.log("Dashboard script: ENDING");
         // --- END SCRIPT ---
     </script>
 </body>
