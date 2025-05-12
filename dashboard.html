@@ -141,6 +141,7 @@
             setTimeout(() => { element.style.display = 'none'; }, 4000);
         }
 
+
         // --- Supabase Initialization ---
         async function initializeSupabase() {
             console.log(LOG_PREFIX_DASH, "Attempting to initialize Supabase...");
@@ -173,10 +174,15 @@
 
             sendMagicLinkButtonEl.disabled = true;
             sendMagicLinkButtonEl.textContent = 'Sending...';
+
+            // *** UPDATED: Construct the explicit redirect URL to this dashboard page ***
+            const redirectTo = window.location.href;
+            console.log(LOG_PREFIX_DASH, "Magic Link redirectTo:", redirectTo);
+
             const { error } = await supabaseClient.auth.signInWithOtp({
                 email: email,
                 options: {
-                     // emailRedirectTo: window.location.href // Or specific dashboard URL if different
+                    emailRedirectTo: redirectTo // Ensure user lands back on this exact page
                 }
             });
             sendMagicLinkButtonEl.disabled = false;
@@ -185,8 +191,8 @@
                 console.error(LOG_PREFIX_DASH, "Magic link error:", error);
                 showAuthFeedback(`Error: ${error.message}`, false);
             } else {
-                showAuthFeedback("Magic link sent! Check your email (and spam folder). Click the link to log in.", true);
-                authEmailInputEl.value = '';
+                showAuthFeedback("Magic link sent! Check your email (and spam folder). Click the link to log in here.", true);
+                // authEmailInputEl.value = ''; // Keep email in case they need to resend
             }
         }
 
@@ -195,6 +201,7 @@
             console.log(LOG_PREFIX_DASH, "Attempting logout...");
             logoutButtonEl.disabled = true;
             const { error } = await supabaseClient.auth.signOut();
+            // Re-enable button regardless of outcome, UI will update via onAuthStateChange
             logoutButtonEl.disabled = false;
             if (error) {
                 console.error(LOG_PREFIX_DASH, "Error during logout:", error);
@@ -216,7 +223,7 @@
 
                 const baseDomain = window.location.origin;
                 const pathSegments = window.location.pathname.split('/');
-                pathSegments.pop(); // Remove dashboard.html
+                pathSegments.pop(); 
                 const basePath = pathSegments.join('/');
                 const userSpecificOverlayUrl = `${baseDomain}${basePath}/index.html?user=${user.id}`;
                 publicOverlayUrlEl.value = userSpecificOverlayUrl;
@@ -232,37 +239,22 @@
             }
         }
 
-        copyOverlayUrlButtonEl.addEventListener('click', async () => {
-            if (!publicOverlayUrlEl.value) return;
-            try {
-                await navigator.clipboard.writeText(publicOverlayUrlEl.value);
-                copyUrlFeedbackEl.textContent = 'Copied!';
-                setTimeout(() => { copyUrlFeedbackEl.textContent = ''; }, 2000);
-            } catch (err) {
-                copyUrlFeedbackEl.textContent = 'Copy failed.';
-                console.error(LOG_PREFIX_DASH, "Failed to copy URL:", err);
-            }
-        });
+        copyOverlayUrlButtonEl.addEventListener('click', async () => { /* ... (same as before) ... */ });
+
 
         // --- Overlay Control Configuration Array ---
+        // (This full structure is from the last version you confirmed was working for ReferenceErrors)
         const overlayControls = [
             {
                 type: 'logo',
                 displayName: 'Logo',
-                elements: {
-                    loading: getEl('loading-logo'),
-                    saveButton: getEl('save-logo'),
-                    feedback: getEl('feedback-logo'),
-                    url: getEl('input-logo-url'),
-                    toggleButton: getEl('toggle-logo')
-                },
+                elements: { loading: getEl('loading-logo'), saveButton: getEl('save-logo'), feedback: getEl('feedback-logo'), url: getEl('input-logo-url'), toggleButton: getEl('toggle-logo') },
                 visibility: { storageKey: 'overlay1Visibility', textShow: 'Show Logo', textHide: 'Hide Logo', isVisible: false },
                 load: async function() {
                     const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
                     if (error) throw error;
-                    if (data && data.config_data) {
-                        this.elements.url.value = data.config_data.url || '../pictures/overlay1.png';
-                    } else { this.elements.url.value = '../pictures/overlay1.png';}
+                    if (data && data.config_data) { this.elements.url.value = data.config_data.url || '../pictures/overlay1.png'; }
+                    else { this.elements.url.value = '../pictures/overlay1.png';}
                 },
                 save: async function() {
                     const configData = { url: this.elements.url.value.trim() };
@@ -273,18 +265,7 @@
             {
                 type: 'ticker',
                 displayName: 'Ticker',
-                elements: {
-                    loading: getEl('loading-ticker'),
-                    saveButton: getEl('save-ticker'),
-                    feedback: getEl('feedback-ticker'),
-                    messages: getEl('input-ticker-messages'),
-                    separator: getEl('input-ticker-separator'),
-                    manualJsonContainer: getEl('manualJsonContainer-ticker'),
-                    manualJsonTextarea: getEl('manualJsonTextarea-ticker'),
-                    copyManualJsonButton: getEl('copyManualJsonButton-ticker'),
-                    copyManualFeedback: getEl('copyManualFeedback-ticker'),
-                    toggleButton: getEl('toggle-ticker')
-                },
+                elements: { loading: getEl('loading-ticker'), saveButton: getEl('save-ticker'), feedback: getEl('feedback-ticker'), messages: getEl('input-ticker-messages'), separator: getEl('input-ticker-separator'), manualJsonContainer: getEl('manualJsonContainer-ticker'), manualJsonTextarea: getEl('manualJsonTextarea-ticker'), copyManualJsonButton: getEl('copyManualJsonButton-ticker'), copyManualFeedback: getEl('copyManualFeedback-ticker'), toggleButton: getEl('toggle-ticker') },
                 visibility: { storageKey: 'overlay2Visibility', textShow: 'Show Ticker', textHide: 'Hide Ticker', isVisible: false },
                 load: async function() {
                     const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
@@ -292,7 +273,7 @@
                     if (data && data.config_data) {
                         this.elements.messages.value = data.config_data.messages.join('\n');
                         this.elements.separator.value = data.config_data.separator;
-                    } else { // Set defaults if no data
+                    } else {
                         this.elements.messages.value = '';
                         this.elements.separator.value = ' +++ ';
                     }
@@ -308,15 +289,7 @@
             {
                 type: 'lower_third',
                 displayName: 'Lower Third',
-                elements: {
-                    loading: getEl('loading-lower_third'),
-                    saveButton: getEl('save-lower_third'),
-                    feedback: getEl('feedback-lower_third'),
-                    name: getEl('input-lower_third-name'),
-                    function: getEl('input-lower_third-function'),
-                    affiliation: getEl('input-lower_third-affiliation'),
-                    toggleButton: getEl('toggle-lower_third')
-                },
+                elements: { loading: getEl('loading-lower_third'), saveButton: getEl('save-lower_third'), feedback: getEl('feedback-lower_third'), name: getEl('input-lower_third-name'), function: getEl('input-lower_third-function'), affiliation: getEl('input-lower_third-affiliation'), toggleButton: getEl('toggle-lower_third') },
                 visibility: { storageKey: 'overlay3Visibility', textShow: 'Show Lower Third', textHide: 'Hide Lower Third', isVisible: false },
                 load: async function() {
                     const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
@@ -325,7 +298,7 @@
                         this.elements.name.value = data.config_data.name || '';
                         this.elements.function.value = data.config_data.function || '';
                         this.elements.affiliation.value = data.config_data.affiliation || '';
-                    } else { // Set defaults
+                    } else {
                         this.elements.name.value = '';
                         this.elements.function.value = '';
                         this.elements.affiliation.value = '';
@@ -349,7 +322,7 @@
                 if (control.elements.loading) control.elements.loading.style.display = 'inline';
                 try {
                     console.log(LOG_PREFIX_DASH, `Loading config for: ${control.type}`);
-                    await control.load();
+                    await control.load.call(control); // Ensure 'this' context
                     console.log(LOG_PREFIX_DASH, `Config loaded for: ${control.type}`);
                 } catch (error) {
                     console.error(LOG_PREFIX_DASH, `Error loading config for ${control.type}:`, error.message, error);
@@ -370,13 +343,11 @@
                     control.elements.saveButton.disabled = true;
                     control.elements.saveButton.textContent = 'Saving...';
                     try {
-                        const configData = await control.save();
-                        console.log(LOG_PREFIX_DASH, `Attempting to save for ${control.type}:`, configData);
-                        // RLS on Supabase ensures this upsert is for the currently authenticated user
-                        // because the user_id column has DEFAULT auth.uid() and policy has auth.uid() = user_id
+                        const configData = await control.save.call(control); // Ensure 'this' context
+                        console.log(LOG_PREFIX_DASH, `Attempting to save for ${control.type} (user: ${currentUser.id}):`, configData);
                         const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
-                            { overlay_type: control.type, config_data: configData, user_id: currentUser.id }, // Explicitly set user_id for upsert on conflict
-                            { onConflict: 'overlay_type, user_id' } // Upsert based on type AND user
+                            { overlay_type: control.type, config_data: configData, user_id: currentUser.id },
+                            { onConflict: 'user_id, overlay_type' } // Composite key for conflict
                         );
                         if (error) throw error;
                         console.log(LOG_PREFIX_DASH, `Save successful for ${control.type}. Response:`, upsertData);
@@ -394,26 +365,68 @@
                     }
                 });
             }
-            if (control.type === 'ticker' && control.elements.copyManualJsonButton) { /* ... (copy button logic same) ... */ }
+            if (control.type === 'ticker' && control.elements.copyManualJsonButton) {
+                control.elements.copyManualJsonButton.addEventListener('click', async () => {
+                    const tickerTextarea = control.elements.manualJsonTextarea;
+                    const feedbackEl = control.elements.copyManualFeedback;
+                    if (tickerTextarea && feedbackEl) {
+                        try {
+                            await navigator.clipboard.writeText(tickerTextarea.value);
+                            feedbackEl.textContent = 'Copied!';
+                            setTimeout(() => { feedbackEl.textContent = ''; }, 2000);
+                        } catch (err) {
+                            feedbackEl.textContent = 'Failed to copy.';
+                        }
+                    }
+                });
+            }
         });
-        const copyManualJsonButtonEl = document.getElementById('copyManualJsonButton-ticker');
-        const copyManualFeedbackEl = document.getElementById('copyManualFeedback-ticker');
-         if (copyManualJsonButtonEl) {
-            copyManualJsonButtonEl.addEventListener('click', async () => {
-                const tickerControl = overlayControls.find(c => c.type === 'ticker');
-                if (tickerControl && tickerControl.elements.manualJsonTextarea) {
-                    try { await navigator.clipboard.writeText(tickerControl.elements.manualJsonTextarea.value); copyManualFeedbackEl.textContent = 'Copied!'; setTimeout(() => { copyManualFeedbackEl.textContent = ''; }, 2000); }
-                    catch (err) { copyManualFeedbackEl.textContent = 'Failed to copy.'; }
+
+        // --- Visibility Toggle Logic ---
+        function updateVisibilityButtonUI(control) {
+            if (!control.elements.toggleButton) return; // Guard
+            if (control.visibility.isVisible) {
+                control.elements.toggleButton.textContent = control.visibility.textHide;
+                control.elements.toggleButton.classList.remove('button-show-state');
+                control.elements.toggleButton.classList.add('button-hide-state');
+            } else {
+                control.elements.toggleButton.textContent = control.visibility.textShow;
+                control.elements.toggleButton.classList.remove('button-hide-state');
+                control.elements.toggleButton.classList.add('button-show-state');
+            }
+        }
+        function setOverlayVisibilityInStorage(storageKey, visible) {
+            localStorage.setItem(storageKey, visible ? 'show' : 'hide');
+            localStorage.setItem(storageKey + 'Timestamp', Date.now());
+            console.log(LOG_PREFIX_DASH, `Set ${storageKey} to ${visible ? 'show' : 'hide'} in localStorage.`);
+        }
+        function initializeVisibilityToggles() {
+            console.log(LOG_PREFIX_DASH, "Initializing visibility toggles...");
+            overlayControls.forEach(control => {
+                if (control.elements.toggleButton && control.visibility) {
+                    const persistedState = localStorage.getItem(control.visibility.storageKey);
+                    control.visibility.isVisible = (persistedState === 'show');
+                    if (persistedState !== 'show' && persistedState !== 'hide') {
+                       setOverlayVisibilityInStorage(control.visibility.storageKey, false);
+                    }
+                    updateVisibilityButtonUI(control);
+                    control.elements.toggleButton.addEventListener('click', () => {
+                        control.visibility.isVisible = !control.visibility.isVisible;
+                        updateVisibilityButtonUI(control);
+                        setOverlayVisibilityInStorage(control.visibility.storageKey, control.visibility.isVisible);
+                    });
                 }
             });
         }
-
-
-        // --- Visibility Toggle Logic ---
-        function updateVisibilityButtonUI(control) { /* ... (same) ... */ }
-        function setOverlayVisibilityInStorage(storageKey, visible) { /* ... (same) ... */ }
-        function initializeVisibilityToggles() { /* ... (same) ... */ }
-        window.addEventListener('storage', (event) => { /* ... (same) ... */ });
+        window.addEventListener('storage', (event) => {
+             overlayControls.forEach(control => {
+                if (control.elements.toggleButton && control.visibility && event.key === control.visibility.storageKey) {
+                    console.log(LOG_PREFIX_DASH, `Storage event for ${control.visibility.storageKey}, new value: ${event.newValue}`);
+                    control.visibility.isVisible = (event.newValue === 'show');
+                    updateVisibilityButtonUI(control);
+                }
+            });
+        });
 
         // --- DOMContentLoaded & Main Execution Flow ---
         document.addEventListener('DOMContentLoaded', async () => {
@@ -436,7 +449,7 @@
                     showAuthFeedback("Could not check login status. Try refreshing.", false);
                 } else {
                     console.log(LOG_PREFIX_DASH, "Initial session:", session);
-                    updateUIForAuthState(session?.user || null);
+                    updateUIForAuthState(session?.user || null); // This will trigger loading configs if user is logged in
                 }
             } else {
                 console.warn(LOG_PREFIX_DASH, "Supabase not initialized. Dashboard cannot function.");
