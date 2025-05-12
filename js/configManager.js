@@ -9,7 +9,7 @@ export const overlayControls = [
     {
         type: 'logo',
         displayName: 'Logo',
-        elements: { // IDs used here MUST match HTML
+        elements: { // These string IDs MUST match the id attributes in dashboard.html
             loading: 'loading-logo',
             saveButton: 'save-logo',
             feedback: 'feedback-logo',
@@ -20,11 +20,13 @@ export const overlayControls = [
         load: async function() {
             const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
             if (error) throw error;
-            if (data && data.config_data && this.domElements.url) {
-                this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
-            } else if (this.domElements.url) {
-                this.domElements.url.value = '../pictures/overlay1.png';
-            }
+            if (this.domElements.url) { // Check if element exists before using
+                if (data && data.config_data) {
+                    this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
+                } else {
+                    this.domElements.url.value = '../pictures/overlay1.png';
+                }
+            } else { console.warn(LOG_PREFIX_CONFIG_MGR, `load logo: url input not found in domElements for ${this.type}`); }
         },
         save: async function() {
             if (!this.domElements.url) throw new Error("Logo URL input element not found for save.");
@@ -52,12 +54,14 @@ export const overlayControls = [
         load: async function() {
             const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
             if (error) throw error;
+            const messagesEl = this.domElements.messages;
+            const separatorEl = this.domElements.separator;
             if (data && data.config_data) {
-                if(this.domElements.messages) this.domElements.messages.value = (data.config_data.messages || []).join('\n');
-                if(this.domElements.separator) this.domElements.separator.value = data.config_data.separator || ' +++ ';
+                if(messagesEl) messagesEl.value = (data.config_data.messages || []).join('\n');
+                if(separatorEl) separatorEl.value = data.config_data.separator || ' +++ ';
             } else {
-                if(this.domElements.messages) this.domElements.messages.value = '';
-                if(this.domElements.separator) this.domElements.separator.value = ' +++ ';
+                if(messagesEl) messagesEl.value = '';
+                if(separatorEl) separatorEl.value = ' +++ ';
             }
         },
         save: async function() {
@@ -87,14 +91,17 @@ export const overlayControls = [
         load: async function() {
             const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
             if (error) throw error;
+            const nameEl = this.domElements.name;
+            const funcEl = this.domElements.function;
+            const affEl = this.domElements.affiliation;
             if (data && data.config_data) {
-                if(this.domElements.name) this.domElements.name.value = data.config_data.name || '';
-                if(this.domElements.function) this.domElements.function.value = data.config_data.function || '';
-                if(this.domElements.affiliation) this.domElements.affiliation.value = data.config_data.affiliation || '';
+                if(nameEl) nameEl.value = data.config_data.name || '';
+                if(funcEl) funcEl.value = data.config_data.function || '';
+                if(affEl) affEl.value = data.config_data.affiliation || '';
             } else {
-                if(this.domElements.name) this.domElements.name.value = '';
-                if(this.domElements.function) this.domElements.function.value = '';
-                if(this.domElements.affiliation) this.domElements.affiliation.value = '';
+                if(nameEl) nameEl.value = '';
+                if(funcEl) funcEl.value = '';
+                if(affEl) affEl.value = '';
             }
         },
         save: async function() {
@@ -113,33 +120,29 @@ export const overlayControls = [
 export function initializeControlDomElements() {
     console.log(LOG_PREFIX_CONFIG_MGR, "Initializing DOM elements for overlayControls...");
     overlayControls.forEach(control => {
-        control.domElements = {}; // Create/reset domElements
+        control.domElements = {};
         for (const key in control.elements) {
             const elementId = control.elements[key];
-            control.domElements[key] = getEl(elementId);
-            // More specific checks
-            const isFormInput = ['url', 'messages', 'separator', 'name', 'function', 'affiliation'].includes(key);
-            const isButton = ['saveButton', 'toggleButton', 'copyManualJsonButton'].includes(key);
-            const isFeedback = ['feedback', 'copyManualFeedback'].includes(key);
-            const isOptionalContainer = ['manualJsonContainer', 'manualJsonTextarea', 'loading'].includes(key);
+            control.domElements[key] = getEl(elementId); // getEl is imported from ui.js
 
-            if (!control.domElements[key]) {
-                if (isFormInput || isButton || isFeedback) { // These are generally expected
-                     console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
-                } else if (!isOptionalContainer) { // General warning for others not explicitly optional
-                     console.warn(LOG_PREFIX_CONFIG_MGR, `DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
-                }
+            // More specific checks for critical elements
+            const isInput = ['url', 'messages', 'separator', 'name', 'function', 'affiliation'].includes(key);
+            const isButton = ['saveButton', 'toggleButton', 'copyManualJsonButton'].includes(key);
+            // Optional elements that might not always be present or critical if missing.
+            const isOptional = ['loading', 'feedback', 'manualJsonContainer', 'manualJsonTextarea', 'copyManualFeedback'].includes(key);
+
+            if (!control.domElements[key] && !isOptional) { // If it's not optional and not found, it's critical
+                 console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
+            } else if (!control.domElements[key] && isOptional) {
+                 console.warn(LOG_PREFIX_CONFIG_MGR, `Optional DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
             }
         }
     });
     console.log(LOG_PREFIX_CONFIG_MGR, "DOM elements for overlayControls initialization attempt complete.");
 }
 
-// ... (Rest of loadAllConfigs, setupSaveListeners, enableAllDashboardButtons, disableAllDashboardButtons - from previous FULL code)
-// For brevity, I'm not re-pasting those loops here, but they should be identical to the last full version.
-// The key change was ensuring the `elements` ID strings above match your HTML.
 export async function loadAllConfigs() {
-    const user = getCurrentUser();
+    const user = getCurrentUser(); // From auth.js
     if (!supabase || !user) { console.warn(LOG_PREFIX_CONFIG_MGR, "Cannot load configs, Supabase not ready or no user."); return; }
     console.log(LOG_PREFIX_CONFIG_MGR, "Loading all configurations for user:", user.id);
 
@@ -164,7 +167,7 @@ export function setupSaveListeners() {
         if (control.domElements.saveButton) {
             control.domElements.saveButton.addEventListener('click', async () => {
                 console.log(LOG_PREFIX_CONFIG_MGR, `Save button clicked for: ${control.type}`);
-                const user = getCurrentUser();
+                const user = getCurrentUser(); // From auth.js
                 if (!supabase || !user) {
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, 'Not logged in or Supabase not ready.', false);
                     return;
