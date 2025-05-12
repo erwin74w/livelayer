@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Livestream Overlay 1 (Logo)</title>
-    <link rel="stylesheet" href="overlay.css"> <!-- Assuming overlay.css defines #logo position -->
+    <link rel="stylesheet" href="overlay.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <img id="logo" src="" alt="Stream Logo"> <!-- Start with empty src -->
+    <img id="logo" src="" alt="Stream Logo Loading...">
 
     <script>
         const urlParamsOverlay = new URLSearchParams(window.location.search);
@@ -17,141 +17,121 @@
 
         console.log(LOG_PREFIX, "Script started. Raw query string:", window.location.search);
 
-        if (!userIdForThisOverlay) {
-            console.error(LOG_PREFIX, "CRITICAL: Missing 'user' query parameter in URL. Overlay will not function correctly.");
-            const logoImgError = document.getElementById('logo');
-            if(logoImgError) logoImgError.alt = "Error: User ID missing for this overlay configuration.";
-            // Optionally stop further execution
-        }
-
         const logoImg = document.getElementById('logo');
-        // This default path assumes 'pictures' is in the root of your 'livelayer' repo.
-        // On GitHub Pages, this will resolve correctly relative to the domain.
-        const defaultLogoUrl = '../pictures/overlay1.png';
+        const defaultRepoImagePathPrefix = '../pictures/';
+        const defaultLogoFilename = 'overlay1.png'; // Your actual default placeholder
+        const defaultLogoUrl = defaultRepoImagePathPrefix + defaultLogoFilename;
+
         let supabaseClient = null;
         let logoRealtimeChannel = null;
 
+        if (!userIdForThisOverlay) {
+            console.error(LOG_PREFIX, "CRITICAL: Missing 'user' query parameter. Overlay will use default.");
+            if(logoImg) {
+                logoImg.src = defaultLogoUrl; // Show default if no user ID
+                logoImg.alt = "Configuration Error: User ID missing.";
+            }
+        }
+
         async function initializeSupabaseForOverlay() {
             console.log(LOG_PREFIX, "Attempting to initialize Supabase client...");
+            // ... (Keep your existing, working initializeSupabaseForOverlay function here)
+            // Ensure it fetches '../keys.json' and sets supabaseClient
+            // For brevity, assuming it's the same as the last correct version.
             try {
-                const response = await fetch('../keys.json'); // Relative to overlay1.html
-                console.log(LOG_PREFIX, "'keys.json' fetch status:", response.status);
-                if (!response.ok) {
-                    let errorText = "Could not retrieve response text.";
-                    try { errorText = await response.text(); } catch(e) { /* ignore */ }
-                    throw new Error(`HTTP ${response.status} fetching keys.json. Body: ${errorText}`);
-                }
+                const response = await fetch('../keys.json');
+                if (!response.ok) throw new Error(`HTTP ${response.status} fetching keys.json`);
                 const keys = await response.json();
                 if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
-                    throw new Error("Supabase URL or Anon Key is missing/placeholder in keys.json.");
+                    throw new Error("Supabase URL/Key missing or placeholder in keys.json.");
                 }
                 const { createClient } = supabase;
                 supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
-                console.log(LOG_PREFIX, "Supabase client initialized successfully.");
+                console.log(LOG_PREFIX, "Supabase client initialized.");
                 return true;
             } catch (error) {
-                console.error(LOG_PREFIX, "Failed to initialize Supabase:", error.message, error);
-                if(logoImg) logoImg.alt = "Error: Overlay service connection failed.";
+                console.error(LOG_PREFIX, "Failed to initialize Supabase:", error.message);
+                if(logoImg) logoImg.alt = "Service Connection Error";
                 return false;
             }
         }
 
-        function updateLogoSrc(urlFromConfig) {
-            let finalUrl = defaultLogoUrl; // Start with default
+        function updateLogoSrc(urlFromConfig, source = "Unknown") {
+            console.log(LOG_PREFIX, `updateLogoSrc called from [${source}]. Received URL:`, urlFromConfig);
+            let finalUrl = defaultLogoUrl;
 
             if (urlFromConfig) {
-                // Check if it's an absolute URL (starts with http, https, or //)
                 if (/^(https?:)?\/\//i.test(urlFromConfig)) {
-                    finalUrl = urlFromConfig; // Use it directly
-                }
-                // Check if it's a path relative to the site root (e.g., /livelayer/pictures/file.png or pictures/file.png)
-                // For GitHub Pages, paths like '../pictures/overlay1.png' from this file's location,
-                // or '/livelayer/pictures/overlay1.png' (if base URL is erwin74w.github.io)
-                // or 'pictures/overlay1.png' (if base URL is erwin74w.github.io/livelayer/) work.
-                // The key is that the browser resolves it correctly relative to the current page's domain and path.
-                // Our defaultLogoUrl '../pictures/overlay1.png' becomes a full path like:
-                // https://erwin74w.github.io/livelayer/pictures/overlay1.png
-                else {
-                     // If it's a relative path like "pictures/new.png" or "../pictures/new.png"
-                     // the browser will handle resolving it from the current page's location.
-                     // For consistency, if the stored URL is just "pictures/myimage.png",
-                     // it implies it's relative to the *repository root* from a GitHub Pages perspective.
-                     // The `../` in defaultLogoUrl handles being in the `overlay1` subfolder.
-                     // If urlFromConfig is just "new_logo.png", it would look for it in /livelayer/overlay1/new_logo.png
-                     // So, the stored URL should be like '../pictures/new_logo.png' or 'pictures/new_logo.png'
-                     // if you want it relative from this file or from the effective root on GH Pages.
-
-                    // Let's assume the stored URL is intended to be relative from the /livelayer/ root
-                    // or it's already correctly relative like '../pictures/...'
-                    if (urlFromConfig.startsWith('../') || urlFromConfig.startsWith('./') || !urlFromConfig.startsWith('/')) {
-                        // It's already a relative path or a path from the current directory
-                        finalUrl = urlFromConfig;
-                    } else if (urlFromConfig.startsWith('/')) {
-                        // If it's an absolute path from the domain root, e.g. "/livelayer/pictures/img.png"
-                        // This is fine.
-                        finalUrl = urlFromConfig;
-                    }
+                    finalUrl = urlFromConfig;
+                } else if (urlFromConfig.startsWith('../') || urlFromConfig.startsWith('./')) {
+                    finalUrl = urlFromConfig;
+                } else if (urlFromConfig.includes('/')) { // like "pictures/new.png"
+                     finalUrl = '../' + urlFromConfig; // Make it relative from overlay1/ to root/
+                } else { // Just a filename "new.png"
+                    finalUrl = defaultRepoImagePathPrefix + urlFromConfig;
                 }
             }
             
-            console.log(LOG_PREFIX, `Updating logo src to: ${finalUrl}`);
+            console.log(LOG_PREFIX, `Setting logo src to: ${finalUrl}`);
             if (logoImg) {
+                logoImg.src = ""; // Clear src first to force reload if URL is the same but content changed (less common)
                 logoImg.src = finalUrl;
+                logoImg.alt = `Logo: ${finalUrl.substring(finalUrl.lastIndexOf('/') + 1)}`;
                 logoImg.onerror = () => {
-                    console.error(LOG_PREFIX, `Error loading image: ${finalUrl}. Falling back to default or showing alt text.`);
-                    logoImg.alt = `Image not found: ${finalUrl.substring(finalUrl.lastIndexOf('/') + 1)}`;
-                    // Optionally, try to set to a known good default again if the configured one fails
-                    // if (finalUrl !== defaultLogoUrl) logoImg.src = defaultLogoUrl; 
+                    console.error(LOG_PREFIX, `Error loading image: ${finalUrl}. Displaying default.`);
+                    logoImg.src = defaultLogoUrl; // Fallback to known good default on error
+                    logoImg.alt = `Image not found. Default shown.`;
+                };
+                logoImg.onload = () => {
+                    console.log(LOG_PREFIX, `Image loaded successfully: ${finalUrl}`);
                 };
             } else {
                 console.error(LOG_PREFIX, "Logo image element not found in DOM.");
             }
         }
 
-
-        async function loadAndListenForLogoChanges() {
-            console.log(LOG_PREFIX, "loadAndListenForLogoChanges called.");
-            if (!userIdForThisOverlay) {
-                 console.warn(LOG_PREFIX, "Cannot load/listen, userIdForThisOverlay is missing.");
-                 updateLogoSrc(null); return;
+        async function fetchInitialLogoConfig() {
+            if (!supabaseClient || !userIdForThisOverlay) {
+                console.warn(LOG_PREFIX, "Cannot fetch initial config: Supabase not ready or no user ID.");
+                updateLogoSrc(null, "FetchInitialConfig-PreSupabase");
+                return;
             }
-            if (!supabaseClient) {
-                const initialized = await initializeSupabaseForOverlay();
-                if (!initialized) {
-                    console.warn(LOG_PREFIX, "Supabase init failed, using default logo.");
-                    updateLogoSrc(null); return;
-                }
-            }
-
-            // Initial load
-            console.log(LOG_PREFIX, "Attempting initial logo data load for user_id:", userIdForThisOverlay);
+            console.log(LOG_PREFIX, "Fetching initial logo data for user_id:", userIdForThisOverlay);
             try {
-                const { data, error } = await supabaseClient
+                const { data, error, status } = await supabaseClient
                     .from('overlay_configurations')
                     .select('config_data')
                     .eq('overlay_type', 'logo')
                     .eq('user_id', userIdForThisOverlay)
                     .maybeSingle();
 
+                console.log(LOG_PREFIX, "Initial fetch Supabase response status:", status);
                 if (error) {
                     console.error(LOG_PREFIX, 'Error fetching initial logo config:', error);
-                    updateLogoSrc(null);
+                    updateLogoSrc(null, "FetchInitialConfig-Error");
                 } else if (data && data.config_data && data.config_data.url) {
                     console.log(LOG_PREFIX, "Initial logo config loaded from DB:", data.config_data);
-                    updateLogoSrc(data.config_data.url);
+                    updateLogoSrc(data.config_data.url, "FetchInitialConfig-Success");
                 } else {
-                    console.log(LOG_PREFIX, "No initial logo config in DB or URL missing, using default.");
-                    updateLogoSrc(null); // This will use defaultLogoUrl
+                    console.log(LOG_PREFIX, "No initial logo config in DB or URL missing, using default. Data:", data);
+                    updateLogoSrc(null, "FetchInitialConfig-NoData");
                 }
             } catch (fetchError) {
-                console.error(LOG_PREFIX, 'Supabase initial fetch exception for logo:', fetchError);
-                updateLogoSrc(null);
+                console.error(LOG_PREFIX, 'Exception during Supabase initial fetch for logo:', fetchError);
+                updateLogoSrc(null, "FetchInitialConfig-Exception");
             }
+        }
 
-            // Subscribe to future changes
+        function setupRealtimeSubscription() {
+            if (!supabaseClient || !userIdForThisOverlay) {
+                console.warn(LOG_PREFIX, "Cannot setup Realtime: Supabase not ready or no user ID.");
+                return;
+            }
             if (logoRealtimeChannel) {
-                console.log(LOG_PREFIX, "Removing existing Realtime channel.");
-                try { await supabaseClient.removeChannel(logoRealtimeChannel); } catch (e) { console.error(LOG_PREFIX, "Error removing channel:", e); }
+                console.log(LOG_PREFIX, "Removing existing Realtime channel before re-subscribing.");
+                supabaseClient.removeChannel(logoRealtimeChannel)
+                    .then(() => console.log(LOG_PREFIX, "Old Realtime channel removed."))
+                    .catch(err => console.error(LOG_PREFIX, "Error removing old Realtime channel:", err));
                 logoRealtimeChannel = null;
             }
 
@@ -165,29 +145,65 @@
                     'postgres_changes',
                     { event: '*', schema: 'public', table: 'overlay_configurations', filter: realtimeFilter },
                     (payload) => {
-                        console.log(LOG_PREFIX, 'Realtime: Logo config change received! Payload:', JSON.parse(JSON.stringify(payload)));
-                        if (payload.eventType === 'DELETE' || !payload.new || !payload.new.config_data) {
-                            console.log(LOG_PREFIX, "Realtime: Delete or no new data, using default logo.");
-                            updateLogoSrc(null);
-                        } else if (payload.new.config_data && payload.new.config_data.url) {
-                            console.log(LOG_PREFIX, "Realtime: Applying new logo URL:", payload.new.config_data.url);
-                            updateLogoSrc(payload.new.config_data.url);
+                        console.log(LOG_PREFIX, 'Realtime: Event received! Type:', payload.eventType, 'Payload:', JSON.parse(JSON.stringify(payload)));
+                        if (payload.eventType === 'DELETE') {
+                            console.log(LOG_PREFIX, "Realtime: Config DELETE event, using default logo.");
+                            updateLogoSrc(null, "Realtime-Delete");
+                        } else if (payload.new && payload.new.config_data && payload.new.config_data.url) {
+                            console.log(LOG_PREFIX, "Realtime: Applying new logo URL from payload:", payload.new.config_data.url);
+                            updateLogoSrc(payload.new.config_data.url, "Realtime-Update");
+                        } else if (payload.new && payload.new.config_data && !payload.new.config_data.url) {
+                            console.log(LOG_PREFIX, "Realtime: Update received, but new data has no URL. Using default.");
+                            updateLogoSrc(null, "Realtime-UpdateNoUrl");
+                        } else if (payload.new && !payload.new.config_data) {
+                            console.log(LOG_PREFIX, "Realtime: Update received, but new data has no config_data. Using default.");
+                            updateLogoSrc(null, "Realtime-UpdateNoConfigData");
                         } else {
-                            console.log(LOG_PREFIX, "Realtime: New data malformed or URL missing, using default logo.");
-                             updateLogoSrc(null);
+                            console.log(LOG_PREFIX, "Realtime: Received payload not matching expected update/delete structure. Current data:", payload.new);
                         }
                     }
                 )
-                .subscribe((status, err) => { /* ... (status logging same as before) ... */ });
+                .subscribe((status, err) => {
+                    console.log(LOG_PREFIX, `Realtime: Subscription status for channel '${realtimeChannelName}': ${status}`);
+                    if (status === 'SUBSCRIBED') {
+                        console.log(LOG_PREFIX, 'Realtime: Successfully subscribed to logo config changes!');
+                    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                        console.error(LOG_PREFIX, `Realtime: Subscription error: ${status}`, err);
+                    } else if (status === 'CLOSED') {
+                        console.log(LOG_PREFIX, 'Realtime: Subscription channel closed.');
+                    }
+                });
         }
 
-        if (userIdForThisOverlay) {
-            loadAndListenForLogoChanges();
-        } else {
-            updateLogoSrc(null); // Show default or error alt text if no user ID
+        async function main() {
+            console.log(LOG_PREFIX, "main() called.");
+            if (!userIdForThisOverlay) {
+                updateLogoSrc(null, "Main-NoUserID"); // Ensure default is shown if no user ID
+                return;
+            }
+            const supabaseReady = await initializeSupabaseForOverlay();
+            if (supabaseReady) {
+                await fetchInitialLogoConfig(); // Load initial data
+                setupRealtimeSubscription();    // Then setup listener for future changes
+            } else {
+                updateLogoSrc(null, "Main-SupabaseInitFail"); // Default on init fail
+            }
         }
 
-        window.addEventListener('beforeunload', async () => { /* ... (cleanup same as before) ... */ });
+        main(); // Run the main logic
+
+        window.addEventListener('beforeunload', async () => {
+            console.log(LOG_PREFIX, "'beforeunload' event triggered.");
+            if (logoRealtimeChannel && supabaseClient) {
+                console.log(LOG_PREFIX, "Attempting to remove Realtime channel on unload.");
+                try {
+                    const status = await supabaseClient.removeChannel(logoRealtimeChannel);
+                    console.log(LOG_PREFIX, "Realtime channel removal status on unload:", status);
+                } catch(e) {
+                    console.error(LOG_PREFIX, "Error removing Realtime channel on unload:", e);
+                }
+            }
+        });
     </script>
 </body>
 </html>
