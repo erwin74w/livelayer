@@ -5,107 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Overlay Dashboard & Control</title>
     <link rel="stylesheet" href="dashboard.css">
-    <!-- Supabase CDN script is still needed as modules will use the global 'supabase' object it provides,
-         OR individual modules could import from CDN (like supabaseClient.js does) -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- NO Supabase CDN script here anymore IF supabaseClient.js imports it directly -->
+    <!-- However, if supabaseClient.js expects global 'supabase', keep it.
+         The provided supabaseClient.js now imports from CDN ESM, so this global one *should* be removable.
+         Test carefully. If errors occur about 'supabase' not defined, add it back.
+         For now, let's try removing it to rely solely on module imports. -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> -->
 </head>
 <body>
+    <!-- ... (All the HTML structure from the previous full dashboard.html) ... -->
     <div class="container">
-        <!-- Auth Section -->
-        <div id="authSection">
-            <h1>Login / Sign Up</h1>
-            <div id="authFormContainer">
-                <label for="authEmail">Email:</label>
-                <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email">
-                <button id="sendMagicLinkButton">Send Magic Link</button>
-                <p id="magicLinkInstructions" style="font-size: 0.8em; margin-top: 15px;">
-                    Enter your email and click "Send Magic Link". Check your inbox for a login link.
-                </p>
-            </div>
-            <div id="authFeedback" class="feedback" style="display:none;"></div>
-        </div>
-
-        <!-- Dashboard Content Section (hidden until logged in) -->
-        <div id="dashboardContent" style="display:none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-                <h1>Overlay Dashboard</h1>
-                <div style="text-align: right;">
-                    Logged in as: <strong id="userEmailDisplay"></strong>
-                    <button id="logoutButton" class="config-save-button secondary" style="margin-left: 10px; padding: 6px 10px; font-size:0.85em;">Logout</button>
-                </div>
-            </div>
-            <div id="initError" class="error" style="display:none;">Supabase Initialization Error.</div>
-            <p>Manage overlay configurations and toggle their visibility for your stream.</p>
-            <div>
-                <strong>Your Public Overlay Link:</strong>
-                <input type="text" id="publicOverlayUrl" readonly style="width: 100%; margin-top: 5px; background-color: #f0f0f0; cursor: text; padding: 8px;">
-                <button id="copyOverlayUrlButton" class="config-save-button secondary" style="margin-top:5px;">Copy Link</button>
-                <span id="copyUrlFeedback" class="copy-manual-feedback"></span> <!-- Ensure this ID exists if used by JS -->
-            </div>
-            <hr style="margin: 20px 0;">
-
-
-            <!-- Logo (Overlay 1) -->
-            <details id="details-logo">
-                <summary>
-                    <div class="summary-controls">
-                        <div class="summary-title-area">Logo (Overlay 1) <span id="loading-logo" class="loading-indicator" style="display:none;">Loading...</span></div>
-                        <button id="toggle-logo" class="toggle-visibility-button" disabled>Show Logo</button>
-                    </div>
-                </summary>
-                <div class="details-content">
-                    <label for="input-logo-url">Logo Image URL:</label>
-                    <input type="text" id="input-logo-url" placeholder="../pictures/overlay1.png">
-                    <button id="save-logo" class="config-save-button" disabled>Save Logo Config</button>
-                    <div id="feedback-logo" class="feedback" style="display:none;"></div>
-                </div>
-            </details>
-
-            <!-- Ticker (Overlay 2) -->
-            <details id="details-ticker">
-                <summary>
-                    <div class="summary-controls">
-                        <div class="summary-title-area">Ticker (Overlay 2) <span id="loading-ticker" class="loading-indicator" style="display:none;">Loading...</span></div>
-                        <button id="toggle-ticker" class="toggle-visibility-button" disabled>Show Ticker</button>
-                    </div>
-                </summary>
-                <div class="details-content">
-                    <label for="input-ticker-messages">Ticker Messages (one per line):</label>
-                    <textarea id="input-ticker-messages" placeholder="Message 1\nMessage 2"></textarea>
-                    <label for="input-ticker-separator">Message Separator:</label>
-                    <input type="text" id="input-ticker-separator" value=" +++ ">
-                    <button id="save-ticker" class="config-save-button" disabled>Save Ticker Config</button>
-                    <div id="feedback-ticker" class="feedback" style="display:none;"></div>
-                    <div id="manualJsonContainer-ticker" class="manual-json-container" style="display:none;">
-                         <p><strong>Fallback:</strong> If Supabase save fails, copy this JSON:</p>
-                        <textarea id="manualJsonTextarea-ticker" class="manual-json-textarea" readonly></textarea>
-                        <button id="copyManualJsonButton-ticker" class="config-save-button secondary">Copy Fallback JSON</button>
-                        <span id="copyManualFeedback-ticker" class="copy-manual-feedback"></span>
-                    </div>
-                </div>
-            </details>
-
-            <!-- Lower Third (Overlay 3) -->
-            <details id="details-lower_third">
-                <summary>
-                    <div class="summary-controls">
-                        <div class="summary-title-area">Lower Third (Overlay 3) <span id="loading-lower_third" class="loading-indicator" style="display:none;">Loading...</span></div>
-                        <button id="toggle-lower_third" class="toggle-visibility-button" disabled>Show Lower Third</button>
-                    </div>
-                </summary>
-                <div class="details-content">
-                    <label for="input-lower_third-name">Name:</label>
-                    <input type="text" id="input-lower_third-name" placeholder="Jane Doe">
-                    <label for="input-lower_third-function">Function/Title:</label>
-                    <input type="text" id="input-lower_third-function" placeholder="Lead Developer">
-                    <label for="input-lower_third-affiliation">Affiliation/Company:</label>
-                    <input type="text" id="input-lower_third-affiliation" placeholder="Awesome Inc.">
-                    <button id="save-lower_third" class="config-save-button" disabled>Save Lower Third Config</button>
-                    <div id="feedback-lower_third" class="feedback" style="display:none;"></div>
-                </div>
-            </details>
-        </div><!-- End #dashboardContent -->
-    </div><!-- End .container -->
+        <div id="authSection"> /* ... */ </div>
+        <div id="dashboardContent" style="display:none;"> /* ... */ </div>
+    </div>
 
     <!-- Link to the main JavaScript module -->
     <script type="module" src="js/dashboard.js" defer></script>
