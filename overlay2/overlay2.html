@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ticker Overlay (Supabase)</title>
-    <link rel="stylesheet" href="overlay2.css">
+    <link rel="stylesheet" href="overlay2.css"> <!-- Assuming overlay2.css exists and styles the ticker -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -14,149 +14,191 @@
 
     <script>
         const urlParamsOverlay = new URLSearchParams(window.location.search);
-        const userIdForThisOverlay = urlParamsOverlay.get('user');
-        const LOG_PREFIX = `Overlay2 (Ticker) for User ${userIdForThisOverlay || 'UNKNOWN'}:`;
-        console.log(LOG_PREFIX, "Script started.");
+        const userIdForThisOverlay = urlParamsOverlay.get('user'); // Passed from index.html src
+        const LOG_PREFIX = `Overlay2 (Ticker) for User [${userIdForThisOverlay || 'NO_USER_ID_PARAM'}]:`;
+
+        console.log(LOG_PREFIX, "Script started. Raw query string:", window.location.search);
 
         if (!userIdForThisOverlay) {
-            console.error(LOG_PREFIX, "CRITICAL: Missing 'user' query parameter in URL. Overlay will not function.");
-            document.getElementById('ticker-text').textContent = "Error: User ID missing.";
-            // Optionally throw new Error("Missing user ID for Ticker Overlay");
+            console.error(LOG_PREFIX, "CRITICAL: Missing 'user' query parameter in URL. Overlay will not function correctly.");
+            const tickerTextElForError = document.getElementById('ticker-text');
+            if(tickerTextElForError) tickerTextElForError.textContent = "Error: User ID missing for this overlay configuration.";
+            // Depending on how critical this is, you might want to stop further execution.
+            // For now, it will try to proceed but likely fail or show defaults.
         }
 
         const tickerTextElement = document.getElementById('ticker-text');
-        const defaultTickerData = { messages: ["Ticker not configured..."], separator: " +++ " };
+        const defaultTickerData = { messages: ["Ticker not yet configured..."], separator: " • " };
         let supabaseClient = null;
-        let tickerChannel = null;
+        let tickerRealtimeChannel = null; // Renamed for clarity
 
-        async function initializeSupabase() {
-            console.log(LOG_PREFIX, "Attempting to initialize Supabase...");
+        async function initializeSupabaseForOverlay() {
+            console.log(LOG_PREFIX, "Attempting to initialize Supabase client...");
             try {
-                const response = await fetch('../keys.json'); // Path relative to overlay2.html
-                console.log(LOG_PREFIX, "Fetched keys.json, status:", response.status);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status} fetching keys.json`);
+                // Path relative to this overlay2.html file (up one to root, then to keys.json)
+                const response = await fetch('../keys.json');
+                console.log(LOG_PREFIX, "'keys.json' fetch status:", response.status);
+                if (!response.ok) {
+                    let errorText = "Could not retrieve response text.";
+                    try { errorText = await response.text(); } catch(e) { /* ignore */ }
+                    throw new Error(`HTTP ${response.status} fetching keys.json. Body: ${errorText}`);
+                }
                 const keys = await response.json();
                 if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
-                    throw new Error("Supabase URL or Anon Key is missing/not configured in keys.json.");
+                    throw new Error("Supabase URL or Anon Key is missing/placeholder in keys.json.");
                 }
-                const { createClient } = supabase; // supabase is global from CDN
-                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey); // Use ANON key
+                const { createClient } = supabase; // supabase global from CDN
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey); // Use ANON key for public overlays
                 console.log(LOG_PREFIX, "Supabase client initialized successfully.");
                 return true;
             } catch (error) {
                 console.error(LOG_PREFIX, "Failed to initialize Supabase:", error.message, error);
+                if (tickerTextElement) tickerTextElement.textContent = "Error: Overlay service connection failed.";
                 return false;
             }
         }
 
-        function displayTicker(data) {
-            const currentData = (data && data.messages && data.messages.length > 0) ? data : defaultTickerData;
-            console.log(LOG_PREFIX, "Displaying ticker with data:", currentData);
-            const separator = currentData.separator || " • ";
-            let fullTickerString = currentData.messages.join(separator);
+        function displayTicker(dataToDisplay) {
+            // Use provided data or fallback to default if data is null/undefined or messages are empty
+            const effectiveData = (dataToDisplay && dataToDisplay.messages && dataToDisplay.messages.length > 0)
+                                  ? dataToDisplay
+                                  : defaultTickerData;
 
+            console.log(LOG_PREFIX, "Displaying ticker with data:", JSON.parse(JSON.stringify(effectiveData))); // Deep copy for logging
+
+            if (!tickerTextElement) {
+                console.error(LOG_PREFIX, "Ticker text element not found in DOM.");
+                return;
+            }
+
+            const separator = effectiveData.separator || " • ";
+            let fullTickerString = effectiveData.messages.join(separator);
+
+            // Animation reset logic
             tickerTextElement.style.animation = 'none'; // Stop existing animation
-            tickerTextElement.offsetHeight; // Force reflow/repaint
+            tickerTextElement.offsetHeight; // Force reflow/repaint to ensure animation reset takes effect
 
             tickerTextElement.textContent = fullTickerString + separator + fullTickerString; // Duplicate for seamless scroll
 
-            tickerTextElement.style.animation = ''; // Re-apply CSS animation
-            console.log(LOG_PREFIX, "Ticker display updated and animation reset.");
+            tickerTextElement.style.animation = ''; // Re-apply CSS animation (defined in overlay2.css)
+            console.log(LOG_PREFIX, "Ticker display updated and animation (should be) reset.");
         }
 
         async function loadAndListenForTickerChanges() {
             console.log(LOG_PREFIX, "loadAndListenForTickerChanges called.");
+
             if (!userIdForThisOverlay) {
-                 console.warn(LOG_PREFIX, "Cannot load/listen, userIdForThisOverlay is missing.");
-                 displayTicker(null); // Use default
+                 console.warn(LOG_PREFIX, "Cannot load/listen for ticker changes, userIdForThisOverlay is missing from URL params.");
+                 displayTicker(null); // Display default or error message
                  return;
             }
 
             if (!supabaseClient) {
-                const initialized = await initializeSupabase();
+                const initialized = await initializeSupabaseForOverlay();
                 if (!initialized) {
-                    console.warn(LOG_PREFIX, "Supabase init failed during load/listen, using default ticker data.");
-                    displayTicker(null); // Use default
+                    console.warn(LOG_PREFIX, "Supabase init failed during load/listen, cannot proceed for ticker.");
+                    displayTicker(null); // Display default or error message
                     return;
                 }
             }
 
-            // Initial load
-            console.log(LOG_PREFIX, "Attempting initial data load for user:", userIdForThisOverlay);
+            // Initial data load
+            console.log(LOG_PREFIX, "Attempting initial ticker data load for user_id:", userIdForThisOverlay);
             try {
                 const { data, error } = await supabaseClient
                     .from('overlay_configurations')
                     .select('config_data')
-                    .eq('overlay_type', 'ticker')
-                    .eq('user_id', userIdForThisOverlay) // Filter by user_id
-                    .maybeSingle();
+                    .eq('overlay_type', 'ticker')          // Filter by overlay type
+                    .eq('user_id', userIdForThisOverlay)  // *** CRITICAL: Filter by the specific user's ID ***
+                    .maybeSingle(); // Expect one or zero rows for this user and type
 
                 if (error) {
-                    console.error(LOG_PREFIX, "Error loading initial content:", error);
-                    displayTicker(null);
+                    console.error(LOG_PREFIX, "Error loading initial ticker content from Supabase:", error);
+                    displayTicker(null); // Show default on error
                 } else if (data && data.config_data) {
-                    console.log(LOG_PREFIX, "Initial config loaded from DB:", data.config_data);
+                    console.log(LOG_PREFIX, "Initial ticker config loaded from DB:", data.config_data);
                     displayTicker(data.config_data);
                 } else {
-                    console.log(LOG_PREFIX, "No initial config in DB or data malformed for this user, using default.");
-                    displayTicker(null);
+                    console.log(LOG_PREFIX, "No initial ticker config found in DB for this user, or data format incorrect. Displaying default.");
+                    displayTicker(null); // No specific config for this user/type, show default
                 }
             } catch (fetchError) {
-                 console.error(LOG_PREFIX, "Supabase initial fetch error:", fetchError);
-                 displayTicker(null);
+                 console.error(LOG_PREFIX, "Exception during Supabase initial fetch for ticker:", fetchError);
+                 displayTicker(null); // Show default on exception
             }
 
-            // Subscribe to future changes
-            if (tickerChannel) {
+            // Subscribe to future changes for this specific user and overlay type
+            if (tickerRealtimeChannel) { // Clean up previous subscription if any
                 console.log(LOG_PREFIX, "Removing existing Realtime channel before re-subscribing.");
-                try { await supabaseClient.removeChannel(tickerChannel); } catch (e) { console.error(LOG_PREFIX, "Error removing old channel:", e); }
-                tickerChannel = null;
+                try {
+                    await supabaseClient.removeChannel(tickerRealtimeChannel);
+                    console.log(LOG_PREFIX, "Successfully removed old Realtime channel.");
+                } catch (removeError) {
+                    console.error(LOG_PREFIX, "Error removing old Realtime channel:", removeError);
+                }
+                tickerRealtimeChannel = null;
             }
 
-            const channelName = `ticker-config-changes-user-${userIdForThisOverlay}`;
-            console.log(LOG_PREFIX, `Attempting to subscribe to Realtime channel '${channelName}' for 'ticker' and user ${userIdForThisOverlay}...`);
-            tickerChannel = supabaseClient
-                .channel(channelName)
+            const realtimeChannelName = `ticker-config-user-${userIdForThisOverlay}`; // Unique channel name per user
+            const realtimeFilter = `overlay_type=eq.ticker&user_id=eq.${userIdForThisOverlay}`;
+            console.log(LOG_PREFIX, `Attempting to subscribe to Realtime channel '${realtimeChannelName}' with filter '${realtimeFilter}'...`);
+
+            tickerRealtimeChannel = supabaseClient
+                .channel(realtimeChannelName)
                 .on(
                     'postgres_changes',
                     {
-                        event: '*',
+                        event: '*', // Listen for INSERT, UPDATE, DELETE
                         schema: 'public',
                         table: 'overlay_configurations',
-                        filter: `overlay_type=eq.ticker&user_id=eq.${userIdForThisOverlay}` // Filter Realtime by user_id and type
+                        filter: realtimeFilter // *** CRITICAL: Filter Realtime events by user_id and type ***
                     },
                     (payload) => {
-                        console.log(LOG_PREFIX, 'Realtime: Ticker config change received! Payload:', payload);
-                        if (payload.eventType === 'DELETE' || !payload.new || !payload.new.config_data) {
-                            console.log(LOG_PREFIX, "Realtime: Delete event or no new data, using default ticker.");
+                        console.log(LOG_PREFIX, 'Realtime: Ticker config change received! Payload:', JSON.parse(JSON.stringify(payload))); // Log a copy
+                        if (payload.eventType === 'DELETE') {
+                            console.log(LOG_PREFIX, "Realtime: Ticker config DELETE event, displaying default.");
                             displayTicker(null);
-                        } else if (payload.new.config_data) {
-                            console.log(LOG_PREFIX, "Realtime: Applying new ticker data:", payload.new.config_data);
+                        } else if (payload.new && payload.new.config_data) {
+                            console.log(LOG_PREFIX, "Realtime: Applying new ticker data from payload:", payload.new.config_data);
                             displayTicker(payload.new.config_data);
                         } else {
-                            console.log(LOG_PREFIX, "Realtime: New data malformed, using default ticker.");
+                            console.log(LOG_PREFIX, "Realtime: New data malformed or missing config_data, displaying default.");
                             displayTicker(null);
                         }
                     }
                 )
                 .subscribe((status, err) => {
-                    console.log(LOG_PREFIX, `Realtime: Subscription status for ${channelName}: ${status}`);
-                    if (status === 'SUBSCRIBED') console.log(LOG_PREFIX, 'Realtime: Successfully subscribed!');
-                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error(LOG_PREFIX, `Realtime: Subscription error: ${status}`, err);
-                    if (status === 'CLOSED') console.log(LOG_PREFIX, 'Realtime: Subscription closed.');
+                    console.log(LOG_PREFIX, `Realtime: Subscription status for channel '${realtimeChannelName}': ${status}`);
+                    if (status === 'SUBSCRIBED') {
+                        console.log(LOG_PREFIX, 'Realtime: Successfully subscribed to ticker changes!');
+                    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                        console.error(LOG_PREFIX, `Realtime: Subscription error: ${status}`, err);
+                        // Optionally, attempt to re-subscribe after a delay or notify
+                    } else if (status === 'CLOSED') {
+                        console.log(LOG_PREFIX, 'Realtime: Subscription channel closed.');
+                    }
                 });
         }
 
         // Start the process only if userIdForThisOverlay is present
         if (userIdForThisOverlay) {
             loadAndListenForTickerChanges();
+        } else {
+            // Already handled at the top, but as a safeguard:
+            if (tickerTextElement) tickerTextElement.textContent = "Configuration Error: No User ID.";
         }
 
+        // Cleanup subscription when the page (iframe) is unloaded
         window.addEventListener('beforeunload', async () => {
-            console.log(LOG_PREFIX, "beforeunload event.");
-            if (tickerChannel && supabaseClient) {
+            console.log(LOG_PREFIX, "'beforeunload' event triggered.");
+            if (tickerRealtimeChannel && supabaseClient) {
                 console.log(LOG_PREFIX, "Attempting to remove Realtime channel on unload.");
-                try { await supabaseClient.removeChannel(tickerChannel); } catch(e) { console.error(LOG_PREFIX, "Error removing channel on unload:", e); }
+                try {
+                    const status = await supabaseClient.removeChannel(tickerRealtimeChannel);
+                    console.log(LOG_PREFIX, "Realtime channel removal status on unload:", status);
+                } catch(e) {
+                    console.error(LOG_PREFIX, "Error removing Realtime channel on unload:", e);
+                }
             }
         });
     </script>
