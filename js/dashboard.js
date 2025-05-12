@@ -1,8 +1,8 @@
 // /root/js/dashboard.js
 import { supabase, initializeSupabase as initSupabaseService } from './supabaseClient.js';
-import { getEl } from './ui.js';
-import { handleSendMagicLink, handleLogout, updateUIForAuthState, getCurrentUser } from './auth.js';
-import { overlayControls, initializeControlDomElements, loadAllConfigs, setupSaveListeners, enableAllDashboardButtons, clearLoadedFlags } from './configManager.js';
+import { getEl } from './ui.js'; // Assuming getEl is general enough
+import { handleSendMagicLink, handleLogout, updateUIForAuthState } from './auth.js';
+import { overlayControls, initializeControlDomElements, loadAllConfigs, setupSaveListeners } from './configManager.js';
 import { initializeVisibilityToggles, setupStorageListener } from './visibilityManager.js';
 
 const LOG_PREFIX_DASH_MAIN = "DashboardMain:";
@@ -11,7 +11,8 @@ const LOG_PREFIX_DASH_MAIN = "DashboardMain:";
 document.addEventListener('DOMContentLoaded', async () => {
     console.log(LOG_PREFIX_DASH_MAIN, "DOMContentLoaded event START.");
 
-    // Initialize DOM elements for controls first, as other modules might use them via overlayControls
+    // This must be called first as other modules might query DOM elements via getEl
+    // or expect overlayControls[n].domElements to be populated.
     initializeControlDomElements();
 
     // Initial UI state
@@ -24,10 +25,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(magicLinkInstrEl) magicLinkInstrEl.textContent = "Checking authentication status...";
 
 
-    // Attach event listeners for auth buttons
+    // Attach event listeners for global auth buttons
     const sendMagicLnkBtn = getEl('sendMagicLinkButton');
     const logoutBtn = getEl('logoutButton');
-    const copyUrlBtn = getEl('copyOverlayUrlButton'); // Ensure this element exists in HTML and ID matches
+    const copyUrlBtn = getEl('copyOverlayUrlButton');
 
     if (sendMagicLnkBtn) {
         console.log(LOG_PREFIX_DASH_MAIN, "Attaching event listener to sendMagicLinkButton.");
@@ -40,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (copyUrlBtn) {
         copyUrlBtn.addEventListener('click', async () => {
             const pubOverlayUrlInEl = getEl('publicOverlayUrl');
-            const copyUrlFbEl = getEl('copyUrlFeedback'); // Make sure this element exists in HTML
+            const copyUrlFbEl = getEl('copyUrlFeedback');
             if (!pubOverlayUrlInEl || !pubOverlayUrlInEl.value) {
                 if(copyUrlFbEl) copyUrlFbEl.textContent = 'No URL.'; return;
             }
@@ -56,28 +57,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else { console.error(LOG_PREFIX_DASH_MAIN, "copyOverlayUrlButton NOT FOUND!");}
 
 
-    const initialized = await initSupabaseService(); // Call the imported init function
+    const initialized = await initSupabaseService();
     
     if (initialized) {
         const initErrEl = getEl('initError');
         if(initErrEl) initErrEl.style.display = 'none';
         if(magicLinkInstrEl) magicLinkInstrEl.textContent = "Enter your email and click \"Send Magic Link\".";
 
-        setupSaveListeners(); // Setup save listeners after supabase is init and elements are known
-        setupStorageListener(); // Setup listener for localStorage changes
+        setupSaveListeners();
+        setupStorageListener();
 
-        // This must use the supabase client instance from supabaseClient.js
+        // This must use the supabase client instance from supabaseClient.js module
         supabase.auth.onAuthStateChange((event, session) => {
             console.log(LOG_PREFIX_DASH_MAIN, `Auth state change event: ${event}`, "Session present:", !!session);
-            updateUIForAuthState(session?.user || null); // updateUIForAuthState from auth.js
+            updateUIForAuthState(session?.user || null);
         });
 
         console.log(LOG_PREFIX_DASH_MAIN, "Checking initial Supabase session...");
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
             console.error(LOG_PREFIX_DASH_MAIN, "Error getting initial session:", sessionError);
-            // showAuthFeedback might not be available if ui.js not fully linked or error
-            const authFeedbackElement = getEl('authFeedback');
+            const authFeedbackElement = getEl('authFeedback'); // Use getEl
             if (authFeedbackElement) {
                 authFeedbackElement.textContent = "Could not check login status. Try refreshing.";
                 authFeedbackElement.className = 'feedback error';
