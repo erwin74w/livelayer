@@ -1,11 +1,13 @@
 // /root/js/visibilityManager.js
 import { overlayControls } from './configManager.js'; // To access control.visibility and control.domElements.toggleButton
-import { getEl } from './ui.js'; // If needed, but overlayControls should have domElements populated
 
 const LOG_PREFIX_VISIBILITY = "VisibilityManager:";
 
 export function updateVisibilityButtonUI(control) {
-    if (!control.domElements.toggleButton) return;
+    if (!control.domElements.toggleButton) {
+        // console.warn(LOG_PREFIX_VISIBILITY, `Toggle button for ${control.type} not found in domElements.`);
+        return;
+    }
     if (control.visibility.isVisible) {
         control.domElements.toggleButton.textContent = control.visibility.textHide;
         control.domElements.toggleButton.classList.remove('button-show-state');
@@ -29,15 +31,20 @@ export function initializeVisibilityToggles() {
         if (control.domElements.toggleButton && control.visibility) {
             const persistedState = localStorage.getItem(control.visibility.storageKey);
             control.visibility.isVisible = (persistedState === 'show');
+            // Set default in localStorage if not already explicitly set to 'show' or 'hide'
             if (persistedState !== 'show' && persistedState !== 'hide') {
-               setOverlayVisibilityInStorage(control.visibility.storageKey, false);
+               setOverlayVisibilityInStorage(control.visibility.storageKey, false); // Default to hidden
+               control.visibility.isVisible = false; // Ensure local state matches
             }
-            updateVisibilityButtonUI(control);
+            updateVisibilityButtonUI(control); // Update UI based on loaded/defaulted state
+
             control.domElements.toggleButton.addEventListener('click', () => {
                 control.visibility.isVisible = !control.visibility.isVisible;
                 updateVisibilityButtonUI(control);
                 setOverlayVisibilityInStorage(control.visibility.storageKey, control.visibility.isVisible);
             });
+        } else {
+            // console.warn(LOG_PREFIX_VISIBILITY, `Skipping toggle init for ${control.type}: toggle button or visibility config missing.`);
         }
     });
     console.log(LOG_PREFIX_VISIBILITY, "Visibility toggles initialized.");
@@ -53,4 +60,5 @@ export function setupStorageListener() {
             }
         });
     });
+    console.log(LOG_PREFIX_VISIBILITY, "Storage listener for visibility set up.");
 }
