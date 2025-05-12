@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Overlay Dashboard & Control</title>
     <link rel="stylesheet" href="dashboard.css">
-    <!-- Supabase CDN script still needed here as dashboard.js relies on the global 'supabase' object -->
+    <!-- Supabase CDN script is still needed as modules will use the global 'supabase' object it provides,
+         OR individual modules could import from CDN (like supabaseClient.js does) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -39,7 +40,7 @@
                 <strong>Your Public Overlay Link:</strong>
                 <input type="text" id="publicOverlayUrl" readonly style="width: 100%; margin-top: 5px; background-color: #f0f0f0; cursor: text; padding: 8px;">
                 <button id="copyOverlayUrlButton" class="config-save-button secondary" style="margin-top:5px;">Copy Link</button>
-                <span id="copyUrlFeedback" class="copy-manual-feedback"></span>
+                <span id="copyUrlFeedback" class="copy-manual-feedback"></span> <!-- Ensure this ID exists if used by JS -->
             </div>
             <hr style="margin: 20px 0;">
 
@@ -106,7 +107,7 @@
         </div><!-- End #dashboardContent -->
     </div><!-- End .container -->
 
-    <!-- Link to the external JavaScript file -->
-    <script src="js/dashboard.js" defer></script>
+    <!-- Link to the main JavaScript module -->
+    <script type="module" src="js/dashboard.js" defer></script>
 </body>
 </html>
