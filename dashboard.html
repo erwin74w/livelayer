@@ -25,7 +25,6 @@
 
         <!-- Dashboard Content Section (hidden until logged in) -->
         <div id="dashboardContent" style="display:none;">
-            <!-- ... (Dashboard H1, logout, public URL input etc. - same as before) ... -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h1>Overlay Dashboard</h1>
                 <div style="text-align: right;">
@@ -43,22 +42,80 @@
             </div>
             <hr style="margin: 20px 0;">
 
-            <!-- Details sections for Logo, Ticker, Lower Third - same HTML structure as before -->
-            <details id="details-logo"> <!-- ... --> </details>
-            <details id="details-ticker"> <!-- ... --> </details>
-            <details id="details-lower_third"> <!-- ... --> </details>
-        </div>
-    </div>
+
+            <!-- Logo (Overlay 1) -->
+            <details id="details-logo">
+                <summary>
+                    <div class="summary-controls">
+                        <div class="summary-title-area">Logo (Overlay 1) <span id="loading-logo" class="loading-indicator" style="display:none;">Loading...</span></div>
+                        <button id="toggle-logo" class="toggle-visibility-button" disabled>Show Logo</button>
+                    </div>
+                </summary>
+                <div class="details-content">
+                    <label for="input-logo-url">Logo Image URL:</label>
+                    <input type="text" id="input-logo-url" placeholder="../pictures/overlay1.png">
+                    <button id="save-logo" class="config-save-button" disabled>Save Logo Config</button>
+                    <div id="feedback-logo" class="feedback" style="display:none;"></div>
+                </div>
+            </details>
+
+            <!-- Ticker (Overlay 2) -->
+            <details id="details-ticker">
+                <summary>
+                    <div class="summary-controls">
+                        <div class="summary-title-area">Ticker (Overlay 2) <span id="loading-ticker" class="loading-indicator" style="display:none;">Loading...</span></div>
+                        <button id="toggle-ticker" class="toggle-visibility-button" disabled>Show Ticker</button>
+                    </div>
+                </summary>
+                <div class="details-content">
+                    <label for="input-ticker-messages">Ticker Messages (one per line):</label>
+                    <textarea id="input-ticker-messages" placeholder="Message 1\nMessage 2"></textarea>
+                    <label for="input-ticker-separator">Message Separator:</label>
+                    <input type="text" id="input-ticker-separator" value=" +++ ">
+                    <button id="save-ticker" class="config-save-button" disabled>Save Ticker Config</button>
+                    <div id="feedback-ticker" class="feedback" style="display:none;"></div>
+                    <div id="manualJsonContainer-ticker" class="manual-json-container" style="display:none;">
+                         <p><strong>Fallback:</strong> If Supabase save fails, copy this JSON:</p>
+                        <textarea id="manualJsonTextarea-ticker" class="manual-json-textarea" readonly></textarea>
+                        <button id="copyManualJsonButton-ticker" class="config-save-button secondary">Copy Fallback JSON</button>
+                        <span id="copyManualFeedback-ticker" class="copy-manual-feedback"></span>
+                    </div>
+                </div>
+            </details>
+
+            <!-- Lower Third (Overlay 3) -->
+            <details id="details-lower_third">
+                <summary>
+                    <div class="summary-controls">
+                        <div class="summary-title-area">Lower Third (Overlay 3) <span id="loading-lower_third" class="loading-indicator" style="display:none;">Loading...</span></div>
+                        <button id="toggle-lower_third" class="toggle-visibility-button" disabled>Show Lower Third</button>
+                    </div>
+                </summary>
+                <div class="details-content">
+                    <label for="input-lower_third-name">Name:</label>
+                    <input type="text" id="input-lower_third-name" placeholder="Jane Doe">
+                    <label for="input-lower_third-function">Function/Title:</label>
+                    <input type="text" id="input-lower_third-function" placeholder="Lead Developer">
+                    <label for="input-lower_third-affiliation">Affiliation/Company:</label>
+                    <input type="text" id="input-lower_third-affiliation" placeholder="Awesome Inc.">
+                    <button id="save-lower_third" class="config-save-button" disabled>Save Lower Third Config</button>
+                    <div id="feedback-lower_third" class="feedback" style="display:none;"></div>
+                </div>
+            </details>
+        </div><!-- End #dashboardContent -->
+    </div><!-- End .container -->
 
     <script>
         // --- START SCRIPT ---
-        console.log("Dashboard script: Parsing...");
+        console.log("Dashboard script: STARTING");
+
         const LOG_PREFIX_DASH = "Dashboard:";
         let supabaseClient = null;
         let currentUser = null;
-        let initialAuthCheckDone = false; // Flag to manage initial UI state
+        let initialAuthCheckDone = false;
 
-        // DOM Elements (defined early)
+        // DOM Elements
+        console.log("Dashboard script: Defining DOM element constants...");
         const initErrorEl = document.getElementById('initError');
         const authSectionEl = document.getElementById('authSection');
         const dashboardContentEl = document.getElementById('dashboardContent');
@@ -71,155 +128,435 @@
         const copyOverlayUrlButtonEl = document.getElementById('copyOverlayUrlButton');
         const copyUrlFeedbackEl = document.getElementById('copyUrlFeedback');
         const magicLinkInstructionsEl = document.getElementById('magicLinkInstructions');
+        console.log("Dashboard script: sendMagicLinkButtonEl is:", sendMagicLinkButtonEl);
 
 
         // --- Utility & Feedback ---
-        // ... (getEl, showAuthFeedback, showConfigFeedback - same as before) ...
-        function getEl(id) { return document.getElementById(id); }
-        function showAuthFeedback(message, isSuccess, duration = isSuccess ? 4000 : 7000) { /* ... */ }
-        function showConfigFeedback(element, message, isSuccess) { /* ... */ }
+        function getEl(id) { return document.getElementById(id); } // Moved getEl here to be used by loading indicator elements too
+        
+        // UI Elements for loading indicators (must be after getEl is defined)
+        const tickerLoadingEl = getEl('loading-ticker');
+        const ltLoadingEl = getEl('loading-lower_third');
+        const logoLoadingEl = getEl('loading-logo');
+
+        function showAuthFeedback(message, isSuccess, duration = isSuccess ? 4000 : 7000) {
+            if (!authFeedbackEl) { console.error(LOG_PREFIX_DASH, "authFeedbackEl not found!"); return; }
+            authFeedbackEl.textContent = message;
+            authFeedbackEl.className = 'feedback ' + (isSuccess ? 'success' : 'error');
+            authFeedbackEl.style.display = 'block';
+            setTimeout(() => { authFeedbackEl.style.display = 'none'; }, duration);
+        }
+        function showConfigFeedback(element, message, isSuccess) {
+            if (!element) { console.warn(LOG_PREFIX_DASH, "Feedback element for config not found. Message:", message); return; }
+            element.textContent = message;
+            element.className = 'feedback ' + (isSuccess ? 'success' : 'error');
+            element.style.display = 'block';
+            setTimeout(() => { element.style.display = 'none'; }, 4000);
+        }
 
 
         // --- Supabase Initialization ---
-        async function initializeSupabase() { /* ... (same as before, with logs) ... */ }
+        async function initializeSupabase() {
+            console.log(LOG_PREFIX_DASH, "initializeSupabase(): START");
+            try {
+                console.log(LOG_PREFIX_DASH, "initializeSupabase(): Attempting to fetch 'keys.json'...");
+                const response = await fetch('keys.json');
+                console.log(LOG_PREFIX_DASH, "initializeSupabase(): 'keys.json' fetch response status:", response.status);
+
+                if (!response.ok) {
+                    let errorText = "Could not retrieve response text.";
+                    try { errorText = await response.text(); } catch(e) { /* ignore */ }
+                    console.error(LOG_PREFIX_DASH, `initializeSupabase(): Failed to fetch 'keys.json'. Status: ${response.status}. Response text: ${errorText}`);
+                    throw new Error(`HTTP ${response.status} fetching keys.json. Body: ${errorText}`);
+                }
+
+                console.log(LOG_PREFIX_DASH, "initializeSupabase(): Attempting to parse 'keys.json'...");
+                const keys = await response.json();
+                console.log(LOG_PREFIX_DASH, "initializeSupabase(): Parsed 'keys.json'. URL found:", !!keys.supabaseUrl, "Key found:", !!keys.supabaseAnonKey);
+
+                if (!keys.supabaseUrl || !keys.supabaseAnonKey || keys.supabaseUrl.includes("YOUR_ACTUAL") || keys.supabaseAnonKey.includes("YOUR_ACTUAL")) {
+                    console.error(LOG_PREFIX_DASH, "initializeSupabase(): Supabase URL/Key missing or still placeholder in keys.json.", "URL:", keys.supabaseUrl);
+                    throw new Error("Supabase URL/Key missing or placeholder in keys.json.");
+                }
+                console.log(LOG_PREFIX_DASH, "initializeSupabase(): Keys validated.");
+
+                if (typeof supabase === 'undefined' || !supabase.createClient) {
+                    console.error(LOG_PREFIX_DASH, "initializeSupabase(): Supabase global object or createClient function is not available. Check CDN script.");
+                    throw new Error("Supabase library not loaded correctly.");
+                }
+                console.log(LOG_PREFIX_DASH, "initializeSupabase(): Supabase global object found. Attempting to create client...");
+                const { createClient } = supabase;
+                supabaseClient = createClient(keys.supabaseUrl, keys.supabaseAnonKey);
+
+                if (!supabaseClient) {
+                     console.error(LOG_PREFIX_DASH, "initializeSupabase(): supabaseClient is null after createClient call.");
+                     throw new Error("Failed to create Supabase client instance.");
+                }
+                console.log(LOG_PREFIX_DASH, "initializeSupabase(): Supabase client initialized successfully.");
+                return true;
+
+            } catch (error) {
+                console.error(LOG_PREFIX_DASH, "initializeSupabase(): CATCH BLOCK - Failed to initialize Supabase:", error.message, error);
+                if(initErrorEl) {
+                    initErrorEl.textContent = `Supabase Initialization Error: ${error.message}. Cannot proceed.`;
+                    initErrorEl.style.display = 'block';
+                }
+                if(authSectionEl) authSectionEl.style.display = 'none';
+                return false;
+            }
+        }
 
         // --- Authentication Logic ---
-        async function handleSendMagicLink() { /* ... (same as before, with explicit redirectTo and logs) ... */ }
-        async function handleLogout() { /* ... (same as before, with logs) ... */ }
+        async function handleSendMagicLink() {
+            console.log(LOG_PREFIX_DASH, "handleSendMagicLink called.");
+            if (!supabaseClient) {
+                showAuthFeedback("Supabase not initialized. Cannot send magic link.", false);
+                console.error(LOG_PREFIX_DASH, "handleSendMagicLink: Supabase client not ready.");
+                return;
+            }
+            const email = authEmailInputEl.value.trim();
+            if (!email) {
+                showAuthFeedback("Please enter your email.", false);
+                return;
+            }
+
+            console.log(LOG_PREFIX_DASH, "handleSendMagicLink: Disabling button, email:", email);
+            sendMagicLinkButtonEl.disabled = true;
+            sendMagicLinkButtonEl.textContent = 'Sending...';
+
+            const redirectTo = window.location.href;
+            console.log(LOG_PREFIX_DASH, "Magic Link redirectTo:", redirectTo);
+
+            try {
+                const { error } = await supabaseClient.auth.signInWithOtp({
+                    email: email,
+                    options: { emailRedirectTo: redirectTo }
+                });
+
+                sendMagicLinkButtonEl.disabled = false;
+                sendMagicLinkButtonEl.textContent = 'Send Magic Link';
+
+                if (error) {
+                    console.error(LOG_PREFIX_DASH, "Magic link error:", error);
+                    showAuthFeedback(`Error: ${error.message}`, false);
+                } else {
+                    console.log(LOG_PREFIX_DASH, "Magic link request successful for:", email);
+                    showAuthFeedback("Magic link sent! Check your email (and spam folder). Click the link to log in here.", true);
+                }
+            } catch (e) {
+                 console.error(LOG_PREFIX_DASH, "Exception in handleSendMagicLink:", e);
+                 showAuthFeedback("An unexpected error occurred. Please try again.", false);
+                 sendMagicLinkButtonEl.disabled = false;
+                 sendMagicLinkButtonEl.textContent = 'Send Magic Link';
+            }
+        }
+
+        async function handleLogout() {
+            if (!supabaseClient) { console.warn(LOG_PREFIX_DASH, "Logout: Supabase client not ready."); return; }
+            console.log(LOG_PREFIX_DASH, "Attempting logout...");
+            logoutButtonEl.disabled = true;
+            const { error } = await supabaseClient.auth.signOut();
+            logoutButtonEl.disabled = false;
+            if (error) {
+                console.error(LOG_PREFIX_DASH, "Error during logout:", error);
+                showConfigFeedback(initErrorEl, `Logout error: ${error.message}`, false);
+            } else {
+                console.log(LOG_PREFIX_DASH, "Logout successful.");
+                currentUser = null;
+                // UI update handled by onAuthStateChange
+            }
+        }
 
         function updateUIForAuthState(user) {
             console.log(LOG_PREFIX_DASH, "updateUIForAuthState called with user:", user ? user.id : 'null');
             currentUser = user;
-            initialAuthCheckDone = true; // Mark that at least one auth state check has completed
+            initialAuthCheckDone = true;
 
             if (user) {
                 console.log(LOG_PREFIX_DASH, "User IS authenticated. Showing dashboard content.");
-                authSectionEl.style.display = 'none';
-                dashboardContentEl.style.display = 'block';
-                userEmailDisplayEl.textContent = user.email || user.id;
+                if(authSectionEl) authSectionEl.style.display = 'none';
+                if(dashboardContentEl) dashboardContentEl.style.display = 'block';
+                if(userEmailDisplayEl) userEmailDisplayEl.textContent = user.email || user.id;
 
                 const baseDomain = window.location.origin;
                 const pathSegments = window.location.pathname.split('/');
                 pathSegments.pop();
                 const basePath = pathSegments.join('/');
                 const userSpecificOverlayUrl = `${baseDomain}${basePath}/index.html?user=${user.id}`;
-                publicOverlayUrlEl.value = userSpecificOverlayUrl;
+                if(publicOverlayUrlEl) publicOverlayUrlEl.value = userSpecificOverlayUrl;
 
                 document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button').forEach(btn => btn.disabled = false);
-                // Only load configs and init toggles if they haven't been done yet for this session
-                // This prevents re-loading if onAuthStateChange fires multiple times for the same session
-                if (dashboardContentEl.dataset.configsLoaded !== "true") {
+                
+                if (dashboardContentEl && dashboardContentEl.dataset.configsLoaded !== "true") {
                     console.log(LOG_PREFIX_DASH, "Loading configs and initializing toggles for the first time in this session.");
                     loadAllConfigs();
                     initializeVisibilityToggles();
                     dashboardContentEl.dataset.configsLoaded = "true";
                 } else {
-                    console.log(LOG_PREFIX_DASH, "Configs already loaded for this session, skipping reload.");
+                    console.log(LOG_PREFIX_DASH, "Configs already loaded for this session or dashboardContentEl not found, skipping reload.");
                 }
             } else {
                 console.log(LOG_PREFIX_DASH, "User IS NOT authenticated. Showing auth section.");
-                authSectionEl.style.display = 'block';
-                dashboardContentEl.style.display = 'none';
-                dashboardContentEl.dataset.configsLoaded = "false"; // Reset flag
+                if(authSectionEl) authSectionEl.style.display = 'block';
+                if(dashboardContentEl) {
+                    dashboardContentEl.style.display = 'none';
+                    dashboardContentEl.dataset.configsLoaded = "false";
+                }
                 document.querySelectorAll('details button.config-save-button, details button.toggle-visibility-button').forEach(btn => btn.disabled = true);
             }
         }
 
+
         // --- Overlay Control Configuration Array ---
-        // (This full structure is from the last version where ReferenceErrors were fixed)
-        const overlayControls = [ /* ... (Full definition as in previous correct version) ... */ ];
+        const overlayControls = [
+            {
+                type: 'logo',
+                displayName: 'Logo',
+                elements: { loading: getEl('loading-logo'), saveButton: getEl('save-logo'), feedback: getEl('feedback-logo'), url: getEl('input-logo-url'), toggleButton: getEl('toggle-logo') },
+                visibility: { storageKey: 'overlay1Visibility', textShow: 'Show Logo', textHide: 'Hide Logo', isVisible: false },
+                load: async function() {
+                    const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
+                    if (error) throw error;
+                    if (data && data.config_data) { this.elements.url.value = data.config_data.url || '../pictures/overlay1.png'; }
+                    else { this.elements.url.value = '../pictures/overlay1.png';}
+                },
+                save: async function() {
+                    const configData = { url: this.elements.url.value.trim() };
+                    if (!configData.url) { throw new Error("Logo URL cannot be empty."); }
+                    return configData;
+                }
+            },
+            {
+                type: 'ticker',
+                displayName: 'Ticker',
+                elements: { loading: getEl('loading-ticker'), saveButton: getEl('save-ticker'), feedback: getEl('feedback-ticker'), messages: getEl('input-ticker-messages'), separator: getEl('input-ticker-separator'), manualJsonContainer: getEl('manualJsonContainer-ticker'), manualJsonTextarea: getEl('manualJsonTextarea-ticker'), copyManualJsonButton: getEl('copyManualJsonButton-ticker'), copyManualFeedback: getEl('copyManualFeedback-ticker'), toggleButton: getEl('toggle-ticker') },
+                visibility: { storageKey: 'overlay2Visibility', textShow: 'Show Ticker', textHide: 'Hide Ticker', isVisible: false },
+                load: async function() {
+                    const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
+                    if (error) throw error;
+                    if (data && data.config_data) {
+                        this.elements.messages.value = data.config_data.messages.join('\n');
+                        this.elements.separator.value = data.config_data.separator;
+                    } else {
+                        this.elements.messages.value = '';
+                        this.elements.separator.value = ' +++ ';
+                    }
+                },
+                save: async function() {
+                    const messages = this.elements.messages.value.trim().split('\n').map(s => s.trim()).filter(s => s);
+                    const separator = this.elements.separator.value.trim();
+                    const configData = { messages, separator };
+                    if (this.elements.manualJsonTextarea) this.elements.manualJsonTextarea.value = JSON.stringify(configData, null, 2);
+                    return configData;
+                }
+            },
+            {
+                type: 'lower_third',
+                displayName: 'Lower Third',
+                elements: { loading: getEl('loading-lower_third'), saveButton: getEl('save-lower_third'), feedback: getEl('feedback-lower_third'), name: getEl('input-lower_third-name'), function: getEl('input-lower_third-function'), affiliation: getEl('input-lower_third-affiliation'), toggleButton: getEl('toggle-lower_third') },
+                visibility: { storageKey: 'overlay3Visibility', textShow: 'Show Lower Third', textHide: 'Hide Lower Third', isVisible: false },
+                load: async function() {
+                    const { data, error } = await supabaseClient.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
+                    if (error) throw error;
+                    if (data && data.config_data) {
+                        this.elements.name.value = data.config_data.name || '';
+                        this.elements.function.value = data.config_data.function || '';
+                        this.elements.affiliation.value = data.config_data.affiliation || '';
+                    } else {
+                        this.elements.name.value = '';
+                        this.elements.function.value = '';
+                        this.elements.affiliation.value = '';
+                    }
+                },
+                save: async function() {
+                    return {
+                        name: this.elements.name.value.trim(),
+                        function: this.elements.function.value.trim(),
+                        affiliation: this.elements.affiliation.value.trim()
+                    };
+                }
+            }
+        ];
 
         // --- Generic Load and Save Config Logic ---
-        async function loadAllConfigs() { /* ... (same as before, using control.load.call(control)) ... */ }
-        // Attach save event listeners loop (same as before, using control.save.call(control))
+        async function loadAllConfigs() {
+            if (!supabaseClient || !currentUser) { console.warn(LOG_PREFIX_DASH, "Cannot load configs, Supabase not ready or no user."); return; }
+            console.log(LOG_PREFIX_DASH, "Loading all configurations for user:", currentUser.id);
+            for (const control of overlayControls) {
+                if (control.elements.loading) control.elements.loading.style.display = 'inline';
+                try {
+                    console.log(LOG_PREFIX_DASH, `Loading config for: ${control.type}`);
+                    await control.load.call(control);
+                    console.log(LOG_PREFIX_DASH, `Config loaded for: ${control.type}`);
+                } catch (error) {
+                    console.error(LOG_PREFIX_DASH, `Error loading config for ${control.type}:`, error.message, error);
+                    showConfigFeedback(control.elements.feedback, `Error loading: ${error.message}`, false);
+                } finally {
+                    if (control.elements.loading) control.elements.loading.style.display = 'none';
+                }
+            }
+        }
+
+        overlayControls.forEach(control => {
+            if (control.elements.saveButton) {
+                control.elements.saveButton.addEventListener('click', async () => {
+                    console.log(LOG_PREFIX_DASH, `Save button clicked for: ${control.type}`);
+                    if (!supabaseClient || !currentUser) {
+                        showConfigFeedback(control.elements.feedback, 'Not logged in or Supabase not ready.', false); return;
+                    }
+                    control.elements.saveButton.disabled = true;
+                    control.elements.saveButton.textContent = 'Saving...';
+                    try {
+                        const configData = await control.save.call(control);
+                        console.log(LOG_PREFIX_DASH, `Attempting to save for ${control.type} (user: ${currentUser.id}):`, configData);
+                        const { data: upsertData, error } = await supabaseClient.from('overlay_configurations').upsert(
+                            { overlay_type: control.type, config_data: configData, user_id: currentUser.id },
+                            { onConflict: 'user_id, overlay_type' }
+                        );
+                        if (error) throw error;
+                        console.log(LOG_PREFIX_DASH, `Save successful for ${control.type}. Response:`, upsertData);
+                        showConfigFeedback(control.elements.feedback, `${control.displayName} config saved!`, true);
+                        if (control.elements.manualJsonContainer) control.elements.manualJsonContainer.style.display = 'none';
+                    } catch (error) {
+                        console.error(LOG_PREFIX_DASH, `Error saving config for ${control.type}:`, error.message, error);
+                        showConfigFeedback(control.elements.feedback, `Error saving: ${error.message}`, false);
+                        if (control.elements.manualJsonContainer && control.type === 'ticker') {
+                            control.elements.manualJsonContainer.style.display = 'block';
+                        }
+                    } finally {
+                        control.elements.saveButton.disabled = false;
+                        control.elements.saveButton.textContent = `Save ${control.displayName} Config`;
+                    }
+                });
+            }
+            if (control.type === 'ticker' && control.elements.copyManualJsonButton) {
+                 control.elements.copyManualJsonButton.addEventListener('click', async () => {
+                    const tickerTextarea = control.elements.manualJsonTextarea;
+                    const feedbackEl = control.elements.copyManualFeedback;
+                    if (tickerTextarea && feedbackEl) {
+                        try {
+                            await navigator.clipboard.writeText(tickerTextarea.value);
+                            feedbackEl.textContent = 'Copied!';
+                            setTimeout(() => { feedbackEl.textContent = ''; }, 2000);
+                        } catch (err) {
+                            feedbackEl.textContent = 'Failed to copy.';
+                        }
+                    }
+                });
+            }
+        });
+
 
         // --- Visibility Toggle Logic ---
-        function updateVisibilityButtonUI(control) { /* ... (same) ... */ }
-        function setOverlayVisibilityInStorage(storageKey, visible) { /* ... (same) ... */ }
-        function initializeVisibilityToggles() { /* ... (same) ... */ }
-        window.addEventListener('storage', (event) => { /* ... (same) ... */ });
-
+        function updateVisibilityButtonUI(control) {
+            if (!control.elements.toggleButton) return;
+            if (control.visibility.isVisible) {
+                control.elements.toggleButton.textContent = control.visibility.textHide;
+                control.elements.toggleButton.classList.remove('button-show-state');
+                control.elements.toggleButton.classList.add('button-hide-state');
+            } else {
+                control.elements.toggleButton.textContent = control.visibility.textShow;
+                control.elements.toggleButton.classList.remove('button-hide-state');
+                control.elements.toggleButton.classList.add('button-show-state');
+            }
+        }
+        function setOverlayVisibilityInStorage(storageKey, visible) {
+            localStorage.setItem(storageKey, visible ? 'show' : 'hide');
+            localStorage.setItem(storageKey + 'Timestamp', Date.now());
+            console.log(LOG_PREFIX_DASH, `Set ${storageKey} to ${visible ? 'show' : 'hide'} in localStorage.`);
+        }
+        function initializeVisibilityToggles() {
+            console.log(LOG_PREFIX_DASH, "Initializing visibility toggles...");
+            overlayControls.forEach(control => {
+                if (control.elements.toggleButton && control.visibility) {
+                    const persistedState = localStorage.getItem(control.visibility.storageKey);
+                    control.visibility.isVisible = (persistedState === 'show');
+                    if (persistedState !== 'show' && persistedState !== 'hide') {
+                       setOverlayVisibilityInStorage(control.visibility.storageKey, false);
+                    }
+                    updateVisibilityButtonUI(control);
+                    control.elements.toggleButton.addEventListener('click', () => {
+                        control.visibility.isVisible = !control.visibility.isVisible;
+                        updateVisibilityButtonUI(control);
+                        setOverlayVisibilityInStorage(control.visibility.storageKey, control.visibility.isVisible);
+                    });
+                }
+            });
+        }
+        window.addEventListener('storage', (event) => {
+             overlayControls.forEach(control => {
+                if (control.elements.toggleButton && control.visibility && event.key === control.visibility.storageKey) {
+                    console.log(LOG_PREFIX_DASH, `Storage event for ${control.visibility.storageKey}, new value: ${event.newValue}`);
+                    control.visibility.isVisible = (event.newValue === 'show');
+                    updateVisibilityButtonUI(control);
+                }
+            });
+        });
 
         // --- DOMContentLoaded & Main Execution Flow ---
         document.addEventListener('DOMContentLoaded', async () => {
             console.log(LOG_PREFIX_DASH, "DOMContentLoaded event START.");
 
-            // Initial UI state: show auth, hide dashboard, until we know the auth status
-            authSectionEl.style.display = 'block';
-            dashboardContentEl.style.display = 'none';
-            magicLinkInstructionsEl.textContent = "Checking authentication status...";
+            // Initial UI state
+            if(authSectionEl) authSectionEl.style.display = 'block'; // Show auth by default
+            if(dashboardContentEl) dashboardContentEl.style.display = 'none';
+            if(magicLinkInstructionsEl) magicLinkInstructionsEl.textContent = "Checking authentication status...";
 
 
-            // Ensure sendMagicLinkButtonEl is available before attaching listener
+            // Ensure elements are defined before attaching listeners
             if (sendMagicLinkButtonEl) {
                 console.log(LOG_PREFIX_DASH, "Attaching event listener to sendMagicLinkButton.");
                 sendMagicLinkButtonEl.addEventListener('click', handleSendMagicLink);
             } else {
-                console.error(LOG_PREFIX_DASH, "sendMagicLinkButtonEl NOT FOUND when trying to attach listener!");
+                console.error(LOG_PREFIX_DASH, "sendMagicLinkButtonEl NOT FOUND!");
             }
             if (logoutButtonEl) {
                  logoutButtonEl.addEventListener('click', handleLogout);
             }
             if (copyOverlayUrlButtonEl) {
-                copyOverlayUrlButtonEl.addEventListener('click', async () => { /* ... copy logic ... */ });
+                copyOverlayUrlButtonEl.addEventListener('click', async () => {
+                    if (!publicOverlayUrlEl.value) {
+                        if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = 'No URL.'; return;
+                    }
+                    try {
+                        await navigator.clipboard.writeText(publicOverlayUrlEl.value);
+                        if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = 'Copied!';
+                        setTimeout(() => { if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = ''; }, 2000);
+                    } catch (err) {
+                        if(copyUrlFeedbackEl) copyUrlFeedbackEl.textContent = 'Copy failed.';
+                        console.error(LOG_PREFIX_DASH, "Failed to copy URL:", err);
+                    }
+                });
             }
 
 
-            const initialized = await initializeSupabase();
+            const initialized = await initializeSupabase(); // This now has more detailed logging
+            
             if (initialized) {
                 if(initErrorEl) initErrorEl.style.display = 'none';
-                magicLinkInstructionsEl.textContent = "Enter your email and click \"Send Magic Link\". Check your inbox for a login link.";
+                if(magicLinkInstructionsEl) magicLinkInstructionsEl.textContent = "Enter your email and click \"Send Magic Link\". Check your inbox for a login link.";
 
-
-                // This is the main auth listener. It will be called when:
-                // 1. The page loads and Supabase checks for an existing session (event: 'INITIAL_SESSION').
-                // 2. The page loads after a magic link redirect, and Supabase processes the tokens in the URL hash (event: 'SIGNED_IN').
-                // 3. The user logs out (event: 'SIGNED_OUT').
-                // 4. The session token is refreshed in the background (event: 'TOKEN_REFRESHED').
                 supabaseClient.auth.onAuthStateChange((event, session) => {
                     console.log(LOG_PREFIX_DASH, `Auth state change event: ${event}`, "Session present:", !!session);
-                    if (event === 'INITIAL_SESSION' && session) {
-                        console.log(LOG_PREFIX_DASH, "Initial session found. User is already logged in.");
-                        updateUIForAuthState(session.user);
-                    } else if (event === 'SIGNED_IN') {
-                        console.log(LOG_PREFIX_DASH, "User successfully signed in (e.g., after magic link).");
-                        updateUIForAuthState(session.user);
-                        // Clear the URL hash fragment if it contains auth tokens, for a cleaner URL
-                        if (window.location.hash.includes('access_token')) {
-                            console.log(LOG_PREFIX_DASH, "Clearing auth tokens from URL hash.");
-                            window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-                        }
-                    } else if (event === 'SIGNED_OUT') {
-                        console.log(LOG_PREFIX_DASH, "User signed out.");
-                        updateUIForAuthState(null);
-                    } else if (event === 'TOKEN_REFRESHED' && session) {
-                        console.log(LOG_PREFIX_DASH, "Token refreshed. User still logged in.");
-                        // Usually, no UI change needed unless you specifically track session expiry warnings.
-                        // updateUIForAuthState(session.user); // Could call this if needed, but might be redundant
-                    } else if (event === 'PASSWORD_RECOVERY') {
-                        // Handle password recovery UI if you implement that flow
-                        console.log(LOG_PREFIX_DASH, "Password recovery event.");
-                    }
-
-                    // If after all checks, initialAuthCheckDone is true but currentUser is still null, it means no valid session.
-                    if (initialAuthCheckDone && !currentUser) {
-                         console.log(LOG_PREFIX_DASH, "Initial auth checks complete, no active user session. Showing auth form.");
-                         updateUIForAuthState(null); // Ensure auth form is shown
-                    }
+                    updateUIForAuthState(session?.user || null);
                 });
 
-                // An initial getSession() can be useful, but onAuthStateChange with INITIAL_SESSION often covers it.
-                // However, sometimes it helps to explicitly check, especially if onAuthStateChange might be slow to fire.
-                // Let's rely on onAuthStateChange for now as it's designed for this.
-                // If INITIAL_SESSION doesn't fire reliably, then an explicit getSession() call followed by
-                // updateUIForAuthState(session?.user || null) would be needed here.
-                // For now, we set initialAuthCheckDone = false; onAuthStateChange will set it to true.
-
+                console.log(LOG_PREFIX_DASH, "Checking initial Supabase session...");
+                const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+                if (sessionError) {
+                    console.error(LOG_PREFIX_DASH, "Error getting initial session:", sessionError);
+                    showAuthFeedback("Could not check login status. Try refreshing.", false);
+                    updateUIForAuthState(null); // Ensure auth form is shown on error
+                } else {
+                    console.log(LOG_PREFIX_DASH, "Initial session result:", session);
+                    updateUIForAuthState(session?.user || null);
+                }
             } else {
-                // Supabase itself failed to initialize
                 console.warn(LOG_PREFIX_DASH, "Supabase not initialized after DOMContentLoaded. Dashboard cannot function.");
-                if(authSectionEl) authSectionEl.innerHTML = `<p class="error" style="text-align:center;">Critical error: Could not connect to services. Please check configuration.</p>`;
-                if(magicLinkInstructionsEl) magicLinkInstructionsEl.style.display = 'none';
+                if(authSectionEl && magicLinkInstructionsEl) {
+                    authSectionEl.innerHTML = `<p class="error" style="text-align:center;">Critical error: Could not connect to services. Please check configuration or network.</p>`;
+                    magicLinkInstructionsEl.style.display = 'none';
+                }
             }
             console.log(LOG_PREFIX_DASH, "DOMContentLoaded event END.");
         });
