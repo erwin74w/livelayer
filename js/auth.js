@@ -1,7 +1,8 @@
 // /root/js/auth.js
-import { supabase } from './supabaseClient.js'; // We'll create supabaseClient.js next
-import { showAuthFeedback } from './ui.js';
-import { loadAllConfigs, initializeVisibilityToggles, enableAllDashboardButtons, disableAllDashboardButtons, clearLoadedFlags } from './configManager.js'; // Will import functions from configManager
+import { supabase } from './supabaseClient.js'; // Imports the initialized client instance
+import { showAuthFeedback, getEl } from './ui.js';
+import { loadAllConfigs, initializeControlDomElements, enableAllDashboardButtons, disableAllDashboardButtons } from './configManager.js';
+import { initializeVisibilityToggles } from './visibilityManager.js';
 
 const LOG_PREFIX_AUTH = "DashboardAuth:";
 let currentUser = null;
@@ -11,21 +12,15 @@ export function getCurrentUser() {
 }
 
 export async function handleSendMagicLink() {
-    const authEmailInputEl = document.getElementById('authEmail'); // Consider passing this from main dashboard.js
-    const sendMagicLinkButtonEl = document.getElementById('sendMagicLinkButton');
+    const authEmailInputEl = getEl('authEmail');
+    const sendMagicLinkButtonEl = getEl('sendMagicLinkButton');
 
     console.log(LOG_PREFIX_AUTH, "handleSendMagicLink called.");
-    if (!supabase) { // Check if supabase (the global from CDN) is available
-        showAuthFeedback("Supabase library not loaded.", false);
-        console.error(LOG_PREFIX_AUTH, "Supabase global not ready.");
+    if (!supabase) {
+        showAuthFeedback("Supabase client not initialized.", false);
+        console.error(LOG_PREFIX_AUTH, "Supabase client not ready for magic link.");
         return;
     }
-     if (!supabase.auth) { // Check if auth module is available
-        showAuthFeedback("Supabase auth module not ready.", false);
-        console.error(LOG_PREFIX_AUTH, "Supabase auth not ready.");
-        return;
-    }
-
 
     const email = authEmailInputEl ? authEmailInputEl.value.trim() : '';
     if (!email) {
@@ -39,7 +34,7 @@ export async function handleSendMagicLink() {
         sendMagicLinkButtonEl.textContent = 'Sending...';
     }
 
-    const redirectTo = window.location.href;
+    const redirectTo = window.location.href; // User should be on dashboard.html
     console.log(LOG_PREFIX_AUTH, "Magic Link redirectTo:", redirectTo);
 
     try {
@@ -71,21 +66,20 @@ export async function handleSendMagicLink() {
 }
 
 export async function handleLogout() {
-    const logoutButtonEl = document.getElementById('logoutButton'); // Consider passing
-    if (!supabase || !supabase.auth) { console.warn(LOG_PREFIX_AUTH, "Logout: Supabase client/auth not ready."); return; }
+    const logoutButtonEl = getEl('logoutButton');
+    if (!supabase) { console.warn(LOG_PREFIX_AUTH, "Logout: Supabase client not ready."); return; }
     console.log(LOG_PREFIX_AUTH, "Attempting logout...");
     if(logoutButtonEl) logoutButtonEl.disabled = true;
 
     const { error } = await supabase.auth.signOut();
 
-    if(logoutButtonEl) logoutButtonEl.disabled = false;
+    if(logoutButtonEl) logoutButtonEl.disabled = false; // Re-enable regardless of error, onAuthStateChange handles UI
     if (error) {
         console.error(LOG_PREFIX_AUTH, "Error during logout:", error);
-        // showConfigFeedback(getEl('initError'), `Logout error: ${error.message}`, false); // getEl might not be available if ui.js not imported here
+        // Consider showing feedback using showAuthFeedback or a general error display
     } else {
         console.log(LOG_PREFIX_AUTH, "Logout successful.");
-        currentUser = null;
-        // UI update handled by onAuthStateChange in dashboard.js
+        currentUser = null; // Explicitly clear, though onAuthStateChange should handle
     }
 }
 
@@ -93,10 +87,10 @@ export function updateUIForAuthState(user) {
     console.log(LOG_PREFIX_AUTH, "updateUIForAuthState called with user:", user ? user.id : 'null');
     currentUser = user;
 
-    const authSectionEl = document.getElementById('authSection');
-    const dashboardContentEl = document.getElementById('dashboardContent');
-    const userEmailDisplayEl = document.getElementById('userEmailDisplay');
-    const publicOverlayUrlEl = document.getElementById('publicOverlayUrl');
+    const authSectionEl = getEl('authSection');
+    const dashboardContentEl = getEl('dashboardContent');
+    const userEmailDisplayEl = getEl('userEmailDisplay');
+    const publicOverlayUrlEl = getEl('publicOverlayUrl');
 
     if (user) {
         console.log(LOG_PREFIX_AUTH, "User IS authenticated. Showing dashboard content.");
@@ -106,28 +100,28 @@ export function updateUIForAuthState(user) {
 
         const baseDomain = window.location.origin;
         const pathSegments = window.location.pathname.split('/');
-        pathSegments.pop();
+        pathSegments.pop(); // Remove current filename (dashboard.html)
         const basePath = pathSegments.join('/');
         const userSpecificOverlayUrl = `${baseDomain}${basePath}/index.html?user=${user.id}`;
         if(publicOverlayUrlEl) publicOverlayUrlEl.value = userSpecificOverlayUrl;
 
-        enableAllDashboardButtons(); // Call function from configManager
+        enableAllDashboardButtons();
 
         if (dashboardContentEl && dashboardContentEl.dataset.configsLoaded !== "true") {
             console.log(LOG_PREFIX_AUTH, "Loading configs and initializing toggles for the first time in this session.");
-            loadAllConfigs(); // From configManager.js
-            initializeVisibilityToggles(); // From visibilityManager.js
+            loadAllConfigs();
+            initializeVisibilityToggles();
             dashboardContentEl.dataset.configsLoaded = "true";
         } else {
-            console.log(LOG_PREFIX_AUTH, "Configs already loaded for this session, skipping reload.");
+            console.log(LOG_PREFIX_AUTH, "Configs already loaded for this session or dashboardContentEl not found, skipping reload.");
         }
     } else {
         console.log(LOG_PREFIX_AUTH, "User IS NOT authenticated. Showing auth section.");
         if(authSectionEl) authSectionEl.style.display = 'block';
         if(dashboardContentEl) {
             dashboardContentEl.style.display = 'none';
-            dashboardContentEl.dataset.configsLoaded = "false";
+            dashboardContentEl.dataset.configsLoaded = "false"; // Reset flag for next login
         }
-        disableAllDashboardButtons(); // Call function from configManager
+        disableAllDashboardButtons();
     }
 }
