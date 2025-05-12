@@ -5,80 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Stream Overlays</title>
     <style>
-        html, body {
-            background-color: transparent !important;
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            position: relative;
-        }
-        iframe {
-            display: block;
-            width: 100%;
-            height: 100%;
-            border: none;
-            background-color: transparent;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-        .hidden {
-            display: none !important;
-            /* Or use visibility: hidden; opacity: 0; pointer-events: none; if you want animations on show/hide from index.html */
-        }
+        html, body { background-color: transparent !important; margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; position: relative; }
+        iframe { display: block; width: 100%; height: 100%; border: none; background-color: transparent; position: absolute; top: 0; left: 0; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <iframe
-        id="overlayFrame1"
-        src="overlay1/overlay1.html"
-        allowtransparency="true"
-        scrolling="no"
-        frameborder="0"
-        class="hidden"
-    ></iframe>
-
-    <iframe
-        id="overlayFrame2"
-        src="overlay2/overlay2.html"
-        allowtransparency="true"
-        scrolling="no"
-        frameborder="0"
-        class="hidden"
-    ></iframe>
-
-    <iframe
-        id="overlayFrame3"
-        src="overlay3/overlay3.html"
-        allowtransparency="true"
-        scrolling="no"
-        frameborder="0"
-        class="hidden"
-    ></iframe>
+    <iframe id="overlayFrame1" allowtransparency="true" scrolling="no" frameborder="0" class="hidden"></iframe>
+    <iframe id="overlayFrame2" allowtransparency="true" scrolling="no" frameborder="0" class="hidden"></iframe>
+    <iframe id="overlayFrame3" allowtransparency="true" scrolling="no" frameborder="0" class="hidden"></iframe>
 
     <script>
-        const overlayFrames = [
-            {
-                frameEl: document.getElementById('overlayFrame1'),
-                storageKey: 'overlay1Visibility',
-                defaultState: 'hide'
-            },
-            {
-                frameEl: document.getElementById('overlayFrame2'),
-                storageKey: 'overlay2Visibility',
-                defaultState: 'hide'
-            },
-            { // New Overlay 3 frame
-                frameEl: document.getElementById('overlayFrame3'),
-                storageKey: 'overlay3Visibility',
-                defaultState: 'hide'
-            }
+        const LOG_PREFIX_INDEX = "IndexHTML:";
+        console.log(LOG_PREFIX_INDEX, "Script started.");
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const userIdForOverlay = urlParams.get('user'); // This will be the user's actual ID for MVP
+
+        if (!userIdForOverlay) {
+            console.error(LOG_PREFIX_INDEX, "Error: Missing 'user' query parameter in URL.");
+            document.body.innerHTML = "<p style='color:red; font-family:sans-serif; padding:20px; text-align:center;'>ERROR!<br>Overlay User ID missing in URL.<br>Please check the link provided in your dashboard.</p>";
+            // Stop further execution if no ID
+            throw new Error("Missing user identifier for overlays.");
+        }
+        console.log(LOG_PREFIX_INDEX, "User ID for overlays:", userIdForOverlay);
+
+        const overlayFramesConfig = [
+            { id: 'overlayFrame1', srcBase: 'overlay1/overlay1.html', visibilityKey: 'overlay1Visibility', defaultState: 'hide' },
+            { id: 'overlayFrame2', srcBase: 'overlay2/overlay2.html', visibilityKey: 'overlay2Visibility', defaultState: 'hide' },
+            { id: 'overlayFrame3', srcBase: 'overlay3/overlay3.html', visibilityKey: 'overlay3Visibility', defaultState: 'hide' }
         ];
 
-        function applyVisibility(frameElement, state) {
-            if (state === 'show') {
+        function applyVisibility(frameElement, state, visibilityKey) {
+            const shouldShow = state === 'show';
+            console.log(LOG_PREFIX_INDEX, `Applying visibility for ${visibilityKey}: ${shouldShow ? 'SHOW' : 'HIDE'}`);
+            if (shouldShow) {
                 frameElement.classList.remove('hidden');
             } else {
                 frameElement.classList.add('hidden');
@@ -86,26 +47,36 @@
         }
 
         function initializeOverlays() {
-            overlayFrames.forEach(overlay => {
-                const initialState = localStorage.getItem(overlay.storageKey);
-                if (initialState) {
-                    applyVisibility(overlay.frameEl, initialState);
+            console.log(LOG_PREFIX_INDEX, "Initializing overlays...");
+            overlayFramesConfig.forEach(config => {
+                const frame = document.getElementById(config.id);
+                if (frame) {
+                    const frameSrc = `${config.srcBase}?user=${userIdForOverlay}`;
+                    console.log(LOG_PREFIX_INDEX, `Setting src for ${config.id} to: ${frameSrc}`);
+                    frame.src = frameSrc;
+
+                    const initialVisibilityState = localStorage.getItem(config.visibilityKey);
+                    console.log(LOG_PREFIX_INDEX, `Initial localStorage state for ${config.visibilityKey}: ${initialVisibilityState}`);
+                    if (initialVisibilityState) {
+                        applyVisibility(frame, initialVisibilityState, config.visibilityKey);
+                    } else {
+                        applyVisibility(frame, config.defaultState, config.visibilityKey);
+                        // No need to set localStorage here, dashboard.html handles initial defaults
+                    }
                 } else {
-                    applyVisibility(overlay.frameEl, overlay.defaultState);
-                    localStorage.setItem(overlay.storageKey, overlay.defaultState);
-                    localStorage.setItem(overlay.storageKey + 'Timestamp', Date.now());
+                    console.error(LOG_PREFIX_INDEX, `Could not find frame element with ID: ${config.id}`);
                 }
             });
+            console.log(LOG_PREFIX_INDEX, "Overlays initialized.");
         }
 
         window.addEventListener('storage', (event) => {
-            overlayFrames.forEach(overlay => {
-                if (event.key === overlay.storageKey) { // Only react to the main visibility key
-                    if (event.newValue) {
-                        applyVisibility(overlay.frameEl, event.newValue);
-                    } else {
-                        // Key was removed or set to null/undefined, revert to default
-                        applyVisibility(overlay.frameEl, overlay.defaultState);
+            overlayFramesConfig.forEach(config => {
+                if (event.key === config.visibilityKey) {
+                    const frame = document.getElementById(config.id);
+                    if (frame) {
+                        console.log(LOG_PREFIX_INDEX, `Storage event for ${config.visibilityKey}, new value: ${event.newValue}`);
+                        applyVisibility(frame, event.newValue || config.defaultState, config.visibilityKey);
                     }
                 }
             });
