@@ -9,7 +9,7 @@ export const overlayControls = [
     {
         type: 'logo',
         displayName: 'Logo',
-        elements: { // These string IDs MUST match the id attributes in dashboard.html
+        elements: { // IDs used here MUST match HTML
             loading: 'loading-logo',
             saveButton: 'save-logo',
             feedback: 'feedback-logo',
@@ -18,9 +18,9 @@ export const overlayControls = [
         },
         visibility: { storageKey: 'overlay1Visibility', textShow: 'Show Logo', textHide: 'Hide Logo', isVisible: false },
         load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
+            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle(); // RLS scopes this
             if (error) throw error;
-            if (this.domElements.url) { // Check if element exists before using
+            if (this.domElements.url) {
                 if (data && data.config_data) {
                     this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
                 } else {
@@ -123,17 +123,16 @@ export function initializeControlDomElements() {
         control.domElements = {};
         for (const key in control.elements) {
             const elementId = control.elements[key];
-            control.domElements[key] = getEl(elementId); // getEl is imported from ui.js
+            control.domElements[key] = getEl(elementId);
 
-            // More specific checks for critical elements
             const isInput = ['url', 'messages', 'separator', 'name', 'function', 'affiliation'].includes(key);
             const isButton = ['saveButton', 'toggleButton', 'copyManualJsonButton'].includes(key);
-            // Optional elements that might not always be present or critical if missing.
-            const isOptional = ['loading', 'feedback', 'manualJsonContainer', 'manualJsonTextarea', 'copyManualFeedback'].includes(key);
+            const isFeedback = ['feedback', 'copyManualFeedback'].includes(key);
+            const isOptionalContainer = ['manualJsonContainer', 'manualJsonTextarea', 'loading'].includes(key);
 
-            if (!control.domElements[key] && !isOptional) { // If it's not optional and not found, it's critical
+            if (!control.domElements[key] && !isOptionalContainer) {
                  console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
-            } else if (!control.domElements[key] && isOptional) {
+            } else if (!control.domElements[key] && isOptionalContainer && key === 'loading') { // Loading is optional but good to have
                  console.warn(LOG_PREFIX_CONFIG_MGR, `Optional DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
             }
         }
@@ -142,7 +141,7 @@ export function initializeControlDomElements() {
 }
 
 export async function loadAllConfigs() {
-    const user = getCurrentUser(); // From auth.js
+    const user = getCurrentUser();
     if (!supabase || !user) { console.warn(LOG_PREFIX_CONFIG_MGR, "Cannot load configs, Supabase not ready or no user."); return; }
     console.log(LOG_PREFIX_CONFIG_MGR, "Loading all configurations for user:", user.id);
 
@@ -167,7 +166,7 @@ export function setupSaveListeners() {
         if (control.domElements.saveButton) {
             control.domElements.saveButton.addEventListener('click', async () => {
                 console.log(LOG_PREFIX_CONFIG_MGR, `Save button clicked for: ${control.type}`);
-                const user = getCurrentUser(); // From auth.js
+                const user = getCurrentUser();
                 if (!supabase || !user) {
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, 'Not logged in or Supabase not ready.', false);
                     return;
@@ -179,14 +178,17 @@ export function setupSaveListeners() {
                     console.log(LOG_PREFIX_CONFIG_MGR, `Attempting to save for ${control.type} (user: ${user.id}):`, configData);
                     const { data: upsertData, error } = await supabase.from('overlay_configurations').upsert(
                         { overlay_type: control.type, config_data: configData, user_id: user.id },
-                        { onConflict: 'user_id, overlay_type' }
+                        {
+                            onConflict: 'overlay_configurations_user_id_overlay_type_key', // *** CORRECTED onConflict ***
+                            // ignoreDuplicates: false // Default is false, ensures update part of upsert
+                        }
                     );
                     if (error) throw error;
                     console.log(LOG_PREFIX_CONFIG_MGR, `Save successful for ${control.type}. Response:`, upsertData);
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved!`, true);
                     if (control.domElements.manualJsonContainer) control.domElements.manualJsonContainer.style.display = 'none';
                 } catch (error) {
-                    console.error(LOG_PREFIX_CONFIG_MGR, `Error saving config for ${control.type}:`, error.message, error);
+                    console.error(LOG_PREFIX_CONFIG_MGR, `Error saving config for ${control.type}:`, error.message, error); // Log the full error
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Error saving: ${error.message}`, false);
                     if (control.domElements.manualJsonContainer && control.type === 'ticker') {
                         control.domElements.manualJsonContainer.style.display = 'block';
@@ -197,6 +199,7 @@ export function setupSaveListeners() {
                 }
             });
         }
+        // Ticker specific manual copy button
         if (control.type === 'ticker' && control.domElements.copyManualJsonButton && control.domElements.manualJsonTextarea && control.domElements.copyManualFeedback) {
              control.domElements.copyManualJsonButton.addEventListener('click', async () => {
                 const tickerTextarea = control.domElements.manualJsonTextarea;
