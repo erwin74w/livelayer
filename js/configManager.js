@@ -9,29 +9,23 @@ export const overlayControls = [
     {
         type: 'logo',
         displayName: 'Logo',
-        elements: { // IDs used here MUST match HTML
-            loading: 'loading-logo',
-            saveButton: 'save-logo',
-            feedback: 'feedback-logo',
-            url: 'input-logo-url',
-            toggleButton: 'toggle-logo'
+        elements: {
+            loading: 'loading-logo', saveButton: 'save-logo', feedback: 'feedback-logo',
+            url: 'input-logo-url', toggleButton: 'toggle-logo'
         },
         visibility: { storageKey: 'overlay1Visibility', textShow: 'Show Logo', textHide: 'Hide Logo', isVisible: false },
         load: async function() {
-            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle(); // RLS scopes this
+            const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
             if (error) throw error;
             if (this.domElements.url) {
-                if (data && data.config_data) {
-                    this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
-                } else {
-                    this.domElements.url.value = '../pictures/overlay1.png';
-                }
-            } else { console.warn(LOG_PREFIX_CONFIG_MGR, `load logo: url input not found in domElements for ${this.type}`); }
+                if (data && data.config_data) this.domElements.url.value = data.config_data.url || '../pictures/overlay1.png';
+                else this.domElements.url.value = '../pictures/overlay1.png';
+            }
         },
         save: async function() {
-            if (!this.domElements.url) throw new Error("Logo URL input element not found for save.");
+            if (!this.domElements.url) throw new Error("Logo URL input not found.");
             const configData = { url: this.domElements.url.value.trim() };
-            if (!configData.url) { throw new Error("Logo URL cannot be empty."); }
+            if (!configData.url) throw new Error("Logo URL cannot be empty.");
             return configData;
         }
     },
@@ -39,39 +33,32 @@ export const overlayControls = [
         type: 'ticker',
         displayName: 'Ticker',
         elements: {
-            loading: 'loading-ticker',
-            saveButton: 'save-ticker',
-            feedback: 'feedback-ticker',
-            messages: 'input-ticker-messages',
-            separator: 'input-ticker-separator',
-            manualJsonContainer: 'manualJsonContainer-ticker',
-            manualJsonTextarea: 'manualJsonTextarea-ticker',
-            copyManualJsonButton: 'copyManualJsonButton-ticker',
-            copyManualFeedback: 'copyManualFeedback-ticker',
+            loading: 'loading-ticker', saveButton: 'save-ticker', feedback: 'feedback-ticker',
+            messages: 'input-ticker-messages', separator: 'input-ticker-separator',
+            manualJsonContainer: 'manualJsonContainer-ticker', manualJsonTextarea: 'manualJsonTextarea-ticker',
+            copyManualJsonButton: 'copyManualJsonButton-ticker', copyManualFeedback: 'copyManualFeedback-ticker',
             toggleButton: 'toggle-ticker'
         },
         visibility: { storageKey: 'overlay2Visibility', textShow: 'Show Ticker', textHide: 'Hide Ticker', isVisible: false },
         load: async function() {
             const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
             if (error) throw error;
-            const messagesEl = this.domElements.messages;
-            const separatorEl = this.domElements.separator;
-            if (data && data.config_data) {
-                if(messagesEl) messagesEl.value = (data.config_data.messages || []).join('\n');
-                if(separatorEl) separatorEl.value = data.config_data.separator || ' +++ ';
-            } else {
-                if(messagesEl) messagesEl.value = '';
-                if(separatorEl) separatorEl.value = ' +++ ';
+            if (this.domElements.messages && this.domElements.separator) {
+                if (data && data.config_data) {
+                    this.domElements.messages.value = (data.config_data.messages || []).join('\n');
+                    this.domElements.separator.value = data.config_data.separator || ' +++ ';
+                } else {
+                    this.domElements.messages.value = '';
+                    this.domElements.separator.value = ' +++ ';
+                }
             }
         },
         save: async function() {
-            if (!this.domElements.messages || !this.domElements.separator) throw new Error("Ticker form elements not found for save.");
+            if (!this.domElements.messages || !this.domElements.separator) throw new Error("Ticker form elements not found.");
             const messages = this.domElements.messages.value.trim().split('\n').map(s => s.trim()).filter(s => s);
             const separator = this.domElements.separator.value.trim();
             const configData = { messages, separator };
-            if (this.domElements.manualJsonTextarea) {
-                this.domElements.manualJsonTextarea.value = JSON.stringify(configData, null, 2);
-            }
+            if (this.domElements.manualJsonTextarea) this.domElements.manualJsonTextarea.value = JSON.stringify(configData, null, 2);
             return configData;
         }
     },
@@ -79,35 +66,28 @@ export const overlayControls = [
         type: 'lower_third',
         displayName: 'Lower Third',
         elements: {
-            loading: 'loading-lower_third',
-            saveButton: 'save-lower_third',
-            feedback: 'feedback-lower_third',
-            name: 'input-lower_third-name',
-            function: 'input-lower_third-function',
-            affiliation: 'input-lower_third-affiliation',
-            toggleButton: 'toggle-lower_third'
+            loading: 'loading-lower_third', saveButton: 'save-lower_third', feedback: 'feedback-lower_third',
+            name: 'input-lower_third-name', function: 'input-lower_third-function',
+            affiliation: 'input-lower_third-affiliation', toggleButton: 'toggle-lower_third'
         },
         visibility: { storageKey: 'overlay3Visibility', textShow: 'Show Lower Third', textHide: 'Hide Lower Third', isVisible: false },
         load: async function() {
             const { data, error } = await supabase.from('overlay_configurations').select('config_data').eq('overlay_type', this.type).maybeSingle();
             if (error) throw error;
-            const nameEl = this.domElements.name;
-            const funcEl = this.domElements.function;
-            const affEl = this.domElements.affiliation;
-            if (data && data.config_data) {
-                if(nameEl) nameEl.value = data.config_data.name || '';
-                if(funcEl) funcEl.value = data.config_data.function || '';
-                if(affEl) affEl.value = data.config_data.affiliation || '';
-            } else {
-                if(nameEl) nameEl.value = '';
-                if(funcEl) funcEl.value = '';
-                if(affEl) affEl.value = '';
+            if (this.domElements.name && this.domElements.function && this.domElements.affiliation) {
+                if (data && data.config_data) {
+                    this.domElements.name.value = data.config_data.name || '';
+                    this.domElements.function.value = data.config_data.function || '';
+                    this.domElements.affiliation.value = data.config_data.affiliation || '';
+                } else {
+                    this.domElements.name.value = '';
+                    this.domElements.function.value = '';
+                    this.domElements.affiliation.value = '';
+                }
             }
         },
         save: async function() {
-            if (!this.domElements.name || !this.domElements.function || !this.domElements.affiliation) {
-                throw new Error("Lower third form elements not found for save.");
-            }
+            if (!this.domElements.name || !this.domElements.function || !this.domElements.affiliation) throw new Error("LT form elements not found.");
             return {
                 name: this.domElements.name.value.trim(),
                 function: this.domElements.function.value.trim(),
@@ -125,24 +105,20 @@ export function initializeControlDomElements() {
             const elementId = control.elements[key];
             control.domElements[key] = getEl(elementId); // getEl is imported from ui.js
 
-            const isInput = ['url', 'messages', 'separator', 'name', 'function', 'affiliation'].includes(key);
-            const isButton = ['saveButton', 'toggleButton', 'copyManualJsonButton'].includes(key);
-            const isFeedback = ['feedback', 'copyManualFeedback'].includes(key);
-            const isOptionalContainer = ['manualJsonContainer', 'manualJsonTextarea', 'loading'].includes(key);
-
-            if (!control.domElements[key] && !isOptionalContainer) {
+            const isOptional = ['manualJsonContainer', 'manualJsonTextarea', 'copyManualJsonButton', 'copyManualFeedback', 'loading'].includes(key);
+            if (!control.domElements[key] && !isOptional) {
                  console.error(LOG_PREFIX_CONFIG_MGR, `CRITICAL DOM element ID '${elementId}' for '${control.type}.${key}' not found! Functionality will be impaired.`);
-            } else if (!control.domElements[key] && isOptionalContainer && key === 'loading') {
+            } else if (!control.domElements[key] && isOptional && key === 'loading') {
                  console.warn(LOG_PREFIX_CONFIG_MGR, `Optional DOM element ID '${elementId}' for '${control.type}.${key}' not found.`);
             }
         }
     });
-    console.log(LOG_PREFIX_CONFIG_MGR, "DOM elements for overlayControls initialization attempt complete.");
+    console.log(LOG_PREFIX_CONFIG_MGR, "DOM elements for overlayControls initialization complete.");
 }
 
 export async function loadAllConfigs() {
     const user = getCurrentUser(); // From auth.js
-    if (!supabase || !user) { console.warn(LOG_PREFIX_CONFIG_MGR, "Cannot load configs, Supabase not ready or no user."); return; }
+    if (!supabase || !user) { console.warn(LOG_PREFIX_CONFIG_MGR, "Cannot load configs: Supabase not ready or no user."); return; }
     console.log(LOG_PREFIX_CONFIG_MGR, "Loading all configurations for user:", user.id);
 
     for (const control of overlayControls) {
@@ -179,19 +155,19 @@ export function setupSaveListeners() {
                     const { data: upsertData, error } = await supabase.from('overlay_configurations').upsert(
                         { overlay_type: control.type, config_data: configData, user_id: user.id },
                         {
-                            onConflict: 'user_id, overlay_type', // *** USE COLUMN NAMES for supabase-js ***
-                            // ignoreDuplicates: false // Default is false, which means "update on conflict"
+                            onConflict: 'user_id, overlay_type', // *** COLUMNS forming the unique constraint ***
+                            // ignoreDuplicates: false // Default is false, ensures "update" part of "upsert"
                         }
                     );
                     if (error) {
                         console.error(LOG_PREFIX_CONFIG_MGR, `Supabase upsert error for ${control.type}:`, JSON.stringify(error, null, 2));
-                        throw error;
+                        throw error; // This will be caught by the outer catch block
                     }
                     console.log(LOG_PREFIX_CONFIG_MGR, `Save successful for ${control.type}. Response:`, upsertData);
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `${control.displayName} config saved!`, true);
                     if (control.domElements.manualJsonContainer) control.domElements.manualJsonContainer.style.display = 'none';
-                } catch (error) {
-                    console.error(LOG_PREFIX_CONFIG_MGR, `Catch block: Error saving config for ${control.type}:`, error.message, error);
+                } catch (error) { // Catches errors from control.save() or the upsert operation
+                    console.error(LOG_PREFIX_CONFIG_MGR, `Catch block: Error saving config for ${control.type}:`, error.message, error); // Log the full error object
                     if (control.domElements.feedback) showConfigFeedback(control.domElements.feedback, `Error saving: ${error.message}`, false);
                     if (control.domElements.manualJsonContainer && control.type === 'ticker') {
                         control.domElements.manualJsonContainer.style.display = 'block';
